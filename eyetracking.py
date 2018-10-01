@@ -2,7 +2,7 @@ import socket
 import struct
 import threading
 import time
-#import cv2
+import cv2
 import pygtk
 import pygst
 import sys
@@ -27,14 +27,27 @@ KA_VIDEO_MSG = "{\"type\": \"live.video.unicast\", \"key\": \"a178c5e8-e683-411a
 # closefd: avoid socket closing when setting the element to ready
 # demux MPEG2 transport stream
 # A bus forwards messages from the streaming threads to an application in its own thread context
-PIPEDEF =   "udpsrc do-timestamp=true name=src blocksize=1316 buffer-size=560000 !" \
+#"autovideosink name=video"
+#"udpsink host=127.0.0.1 port=5000"
+PIPEDEF =   "udpsrc name=src !" \
             "mpegtsdemux !" \
             "queue !" \
             "ffdec_h264 !" \
             "autovideosink name=video"
 
+def mksock(peer):
+    iptype = socket.AF_INET
+    if ':' in peer[0]:
+        iptype = socket.AF_INET6
+    return socket.socket(iptype, socket.SOCK_DGRAM)
+
+def keep_sockets_alive(peer):
+    td = threading.Timer(0, send_keepalive_msg, [data_socket, KA_DATA_MSG, peer])
+    td.start()
+    tv = threading.Timer(0, send_keepalive_msg, [video_socket, KA_VIDEO_MSG, peer])
+    tv.start()
+
 def send_keepalive_msg(socket, msg, peer):
-    print("Sending " + msg + " to target " + peer[0] + " socket no: " + str(socket.fileno()) + "\n")
     socket.sendto(msg, peer)
     time.sleep(timeout)
 
@@ -47,35 +60,26 @@ def stop_sending_msg():
     running = False
 
 if __name__ == '__main__':
+        
     # setup video and data socket
-    data_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-    data_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    data_socket.bind(('::', bind_port))
-    data_socket.sendto('{"type":"discover"}', (multicast_address, multicast_port))
-
-    video_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-    video_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    video_socket.bind(('::', 49152))
+    multicast_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+    multicast_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    multicast_socket.bind(('::', bind_port))
+    multicast_socket.sendto('{"type":"discover"}', (multicast_address, multicast_port))
 
     while running == True:
-        print(count)
-        count = count + 1
-
-        # receiving the data (not the video)
-        data, address = data_socket.recvfrom(1024)
 
         # setup when getting multicast response
         if connection_init == False:
             connection_init = True
-            print("MULTICAST RESPONSE")
+            data, address = multicast_socket.recvfrom(1024)
             
-            # setting up keep alive messages
-            datatd = threading.Timer(0, send_keepalive_msg, [data_socket, KA_DATA_MSG, (address[0], data_port)])
-            datatd.start()
-            videotd = threading.Timer(0, send_keepalive_msg, [video_socket, KA_VIDEO_MSG, (address[0], data_port)])
-            videotd.start()
+            # Create socket which will send a keep alive message for the live data stream
+            peer = (address[0], data_port)
+            data_socket = mksock(peer)
+            video_socket = mksock(peer)
+            keep_sockets_alive(peer)
 
-            # setting up video gstreamer pipeline
             pipeline = None
             try:
                 print('SETTING UP PIPELINE')
@@ -85,16 +89,23 @@ if __name__ == '__main__':
                 stop_sending_msg()
                 sys.exit(0)
 
+            print("PIPELINE CREATED")
             src = pipeline.get_by_name("src")
             src.set_property("sockfd", video_socket.fileno()) # bind pipeline to correct socket
             pipeline.set_state(gst.STATE_PLAYING)
 
+        else:
+            keep_sockets_alive(peer)
+
+            # receiving the data (not the video)
+            data, address = data_socket.recvfrom(1024)
+            print (data)
+
         # listen for pipeline status changes
         state_change_return, state, pending_state = pipeline.get_state(0)
-        print(state)
         if gst.STATE_CHANGE_FAILURE == state_change_return:
-            print("STATE CHANGE")
-            stop_sending_msg()
+           print("STATE CHANGE")
+           stop_sending_msg()
            
     else:
         print("RUNNING IS SET TO FALSE")

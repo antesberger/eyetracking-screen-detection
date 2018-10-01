@@ -41,15 +41,9 @@ def mksock(peer):
         iptype = socket.AF_INET6
     return socket.socket(iptype, socket.SOCK_DGRAM)
 
-def keep_sockets_alive(peer):
-    td = threading.Timer(0, send_keepalive_msg, [data_socket, KA_DATA_MSG, peer])
-    td.start()
-    tv = threading.Timer(0, send_keepalive_msg, [video_socket, KA_VIDEO_MSG, peer])
-    tv.start()
-
-def send_keepalive_msg(socket, msg, peer):
+def send_keepalive_msg(socket,msg,peer):
+    #print("keeping alive")
     socket.sendto(msg, peer)
-    time.sleep(timeout)
 
 def bus_callback():
     print('new message on pipeline')
@@ -67,6 +61,8 @@ if __name__ == '__main__':
     multicast_socket.bind(('::', bind_port))
     multicast_socket.sendto('{"type":"discover"}', (multicast_address, multicast_port))
 
+    #td = threading.Timer(0, send_keepalive_msg(data_socket,KA_DATA_MSG,peer)).start()
+    #td = threading.Timer(0, send_keepalive_msg(video_socket,KA_VIDEO_MSG,peer)).start()
     while running == True:
 
         # setup when getting multicast response
@@ -78,7 +74,9 @@ if __name__ == '__main__':
             peer = (address[0], data_port)
             data_socket = mksock(peer)
             video_socket = mksock(peer)
-            keep_sockets_alive(peer)
+            
+            threading.Timer(0, send_keepalive_msg, [data_socket,KA_DATA_MSG,peer]).start()
+            threading.Timer(0, send_keepalive_msg, [video_socket,KA_VIDEO_MSG,peer]).start()
 
             pipeline = None
             try:
@@ -95,8 +93,9 @@ if __name__ == '__main__':
             pipeline.set_state(gst.STATE_PLAYING)
 
         else:
-            keep_sockets_alive(peer)
-
+            threading.Timer(0, send_keepalive_msg, [data_socket,KA_DATA_MSG,peer]).start()
+            threading.Timer(0, send_keepalive_msg, [video_socket,KA_VIDEO_MSG,peer]).start()
+            
             # receiving the data (not the video)
             data, address = data_socket.recvfrom(1024)
             print (data)

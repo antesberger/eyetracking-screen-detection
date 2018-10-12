@@ -29,12 +29,25 @@ KA_VIDEO_MSG = "{\"type\": \"live.video.unicast\", \"key\": \"a178c5e8-e683-411a
 # A bus forwards messages from the streaming threads to an application in its own thread context
 #"autovideosink name=video"
 #"udpsink host=127.0.0.1 port=5000"
+
+#demux -> media stream to mpeg transpor stream
+#h264parse -> parse h264 stream 
+#rtph264 -> payload-encode h264 video into rtp packets
+#udpsink -> rtp is sent over udp
 PIPEDEF =   "udpsrc name=src !" \
             "mpegtsdemux !" \
             "queue !" \
             "h264parse !" \
+            "video/x-h264,width=1920,height=1080,framerate=25/1,profile=constrained-baseline !" \
             "rtph264pay !" \
             "udpsink host=127.0.0.1 port=5000"
+
+PIPEDEF2 =  "udpsrc name=src !" \
+            "mpegtsdemux !" \
+            "queue !" \
+            "h264parse !" \
+            "flvmux streamable=true !" \
+            "rtmpsink location='rtmp://127.0.0.1:5000"
 
 def mksock(peer):
     iptype = socket.AF_INET

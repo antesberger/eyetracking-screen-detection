@@ -1,19 +1,9 @@
 import cv2
-import tobii_research as tr
 import time
-
-# Get the eyetracker
-found_eyetrackers = tr.find_all_eyetrackers()
-print found_eyetrackers
-my_eyetracker = found_eyetrackers[0]
-print("Address: " + my_eyetracker.address)
-print("Model: " + my_eyetracker.model)
-print("Name (It's OK if this is empty): " + my_eyetracker.device_name)
-print("Serial number: " + my_eyetracker.serial_number)
 
 # Create a VideoCapture object and read from input file
 # If the input is taken from the camera, pass 0 instead of the video file name.
-cap = cv2.VideoCapture('./markers/test9.mp4')
+cap = cv2.VideoCapture('123.sdp')
 dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
 
 calibrationFile = "calibrationFileName.xml"
@@ -40,9 +30,9 @@ while(True):
     if len(markers[0]) > 0:
         print("marker detected")
         marker_image = cv2.aruco.drawDetectedMarkers(frame_gray,markers[0],markers[1])
-        retval, rvec, tvec = cv2.aruco.estimatePoseBoard(corners, ids, board, camera_matrix, dist_coeffs)  # posture estimation from a diamond
-        if retval != 0:
-            im_with_aruco_board = cv2.aruco.drawAxis(marker_image, camera_matrix, dist_coeffs, rvec, tvec, 100)
+        #retval, rvec, tvec = cv2.aruco.estimatePoseBoard(corners, ids, board, camera_matrix, dist_coeffs)  # posture estimation from a diamond
+        #if retval != 0:
+        #    im_with_aruco_board = cv2.aruco.drawAxis(marker_image, camera_matrix, dist_coeffs, rvec, tvec, 100)
     else:
         print("no markers in frame")
 

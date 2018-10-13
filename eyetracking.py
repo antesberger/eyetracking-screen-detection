@@ -24,12 +24,6 @@ count = 0
 KA_DATA_MSG = "{\"type\": \"live.data.unicast\", \"key\": \"ab305939-5a40-46c0-b08b-15b901adc6b1\", \"op\": \"start\"}"
 KA_VIDEO_MSG = "{\"type\": \"live.video.unicast\", \"key\": \"a178c5e8-e683-411a-9c4c-fcc630ac642e\", \"op\": \"start\"}"
 
-# closefd: avoid socket closing when setting the element to ready
-# demux MPEG2 transport stream
-# A bus forwards messages from the streaming threads to an application in its own thread context
-#"autovideosink name=video"
-#"udpsink host=127.0.0.1 port=5000"
-
 #demux -> media stream to mpeg transpor stream
 #h264parse -> parse h264 stream 
 #rtph264 -> payload-encode h264 video into rtp packets
@@ -42,18 +36,22 @@ PIPEDEF =   "udpsrc name=src !" \
             "rtph264pay !" \
             "udpsink host=127.0.0.1 port=5000"
 
-PIPEDEF2 =  "udpsrc name=src !" \
-            "mpegtsdemux !" \
-            "queue !" \
-            "h264parse !" \
-            "flvmux streamable=true !" \
-            "rtmpsink location='rtmp://127.0.0.1:5000"
+# PIPEDEF2 =  "udpsrc name=src !" \
+#             "mpegtsdemux !" \
+#             "queue !" \
+#             "h264parse !" \
+#             "flvmux streamable=true !" \
+#             "rtmpsink location='rtmp://127.0.0.1:5000"
 
 def mksock(peer):
     iptype = socket.AF_INET
     if ':' in peer[0]:
         iptype = socket.AF_INET6
-    return socket.socket(iptype, socket.SOCK_DGRAM)
+    new_socket = socket.socket(iptype, socket.SOCK_DGRAM)
+    new_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    new_socket.settimeout(3.0)
+
+    return new_socket
 
 def send_keepalive_msg(socket,msg,peer):
     #print("keeping alive")
@@ -70,8 +68,7 @@ def stop_sending_msg():
 if __name__ == '__main__':
         
     # setup video and data socket
-    multicast_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-    multicast_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    multicast_socket = mksock( (multicast_address, bind_port))
     multicast_socket.bind(('::', bind_port))
     multicast_socket.sendto('{"type":"discover"}', (multicast_address, multicast_port))
 
@@ -80,7 +77,17 @@ if __name__ == '__main__':
         # setup when getting multicast response
         if connection_init == False:
             connection_init = True
-            data, address = multicast_socket.recvfrom(1024)
+
+            try:
+                print("ESTABLISHING INITIAL CONNECTION")
+                data, address = multicast_socket.recvfrom(1024) #fe80::2c20:dcff:fe09:3a01%13
+            except socket.error, e:
+                print(e)
+                multicast_socket.close()
+                sys.exit(0)
+            
+            print("Received From: " + address[0] + " -> Data: " + data)
+            multicast_socket.close()
             
             # Create socket which will send a keep alive message for the live data stream
             peer = (address[0], data_port)
@@ -89,7 +96,6 @@ if __name__ == '__main__':
             
             threading.Timer(0, send_keepalive_msg, [data_socket,KA_DATA_MSG,peer]).start()
             threading.Timer(0, send_keepalive_msg, [video_socket,KA_VIDEO_MSG,peer]).start()
-
             
             pipeline = None
             try:
@@ -106,18 +112,19 @@ if __name__ == '__main__':
             src.set_property("sockfd", video_socket.fileno()) # bind pipeline to correct socket
             pipeline.set_state(gst.STATE_PLAYING)
 
-            #cap = cv2.VideoCapture('123.sdp')
-
         else:
             threading.Timer(0, send_keepalive_msg, [data_socket,KA_DATA_MSG,peer]).start()
             threading.Timer(0, send_keepalive_msg, [video_socket,KA_VIDEO_MSG,peer]).start()
             
             # receiving the data (not the video)
-            data, address = data_socket.recvfrom(1024)
+            try:
+               data, address = data_socket.recvfrom(1024)
+            except socket.error, e:
+                print(e)
+                data_socket.close()
+                sys.exit(0)
+            
             print (data)
-
-            #ret, frame = cap.read()
-            #cv2.imshow('frame',frame)
 
         # listen for pipeline status changes
         state_change_return, state, pending_state = pipeline.get_state(0)

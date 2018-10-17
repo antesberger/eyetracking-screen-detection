@@ -1,11 +1,12 @@
 import socket
-import struct
 import threading
 import time
 import cv2
 import pygtk
+import glib
 import pygst
 import sys
+import ast
 
 pygst.require('0.10')
 import gst
@@ -28,20 +29,32 @@ KA_VIDEO_MSG = "{\"type\": \"live.video.unicast\", \"key\": \"a178c5e8-e683-411a
 #h264parse -> parse h264 stream 
 #rtph264 -> payload-encode h264 video into rtp packets
 #udpsink -> rtp is sent over udp
-PIPEDEF =   "udpsrc name=src !" \
+PIPEDEF_UDP =   "udpsrc name=src !" \
             "mpegtsdemux !" \
             "queue !" \
             "h264parse !" \
-            "video/x-h264,width=1920,height=1080,framerate=25/1,profile=constrained-baseline !" \
             "rtph264pay !" \
             "udpsink host=127.0.0.1 port=5000"
 
-# PIPEDEF2 =  "udpsrc name=src !" \
-#             "mpegtsdemux !" \
-#             "queue !" \
-#             "h264parse !" \
-#             "flvmux streamable=true !" \
-#             "rtmpsink location='rtmp://127.0.0.1:5000"
+PIPEDEF_THEORA =   "udpsrc name=src !" \
+            "mpegtsdemux !" \
+            "queue !" \
+            "ffdec_h264 !" \
+            "textoverlay name=textovl text=* halignment=position valignment=position xpad=0  ypad=0 !" \
+            "queue !" \
+            "theoraenc !" \
+            "queue !" \
+            "theoraparse !" \
+            "rtptheorapay !" \
+            "udpsink host=127.0.0.1 port=5000"
+
+PIPEDEF_PLAY =  "udpsrc name=src !" \
+            "mpegtsdemux !" \
+            "queue !" \
+            "ffdec_h264 !" \
+            "identity name=decoded !" \
+            "textoverlay name=textovl text=* halignment=position valignment=position xpad=0  ypad=0 !" \
+            "autovideosink name=video"
 
 def mksock(peer):
     iptype = socket.AF_INET
@@ -57,13 +70,21 @@ def send_keepalive_msg(socket,msg,peer):
     #print("keeping alive")
     socket.sendto(msg, peer)
 
-def bus_callback():
-    print('new message on pipeline')
-
 def stop_sending_msg():
     print("STOPPING")
     global running
     running = False
+
+def draw_gaze(textovl, data):
+    data = ast.literal_eval(data)
+    gp = data.get("gp")
+
+    if gp == None:
+        return
+
+    if gp[0] != 0 and gp[1] != 0:
+        textovl.set_property("xpos", gp[0])
+        textovl.set_property("ypos", gp[1])
 
 if __name__ == '__main__':
         
@@ -83,8 +104,10 @@ if __name__ == '__main__':
                 data, address = multicast_socket.recvfrom(1024) #fe80::2c20:dcff:fe09:3a01%13
             except socket.error, e:
                 print(e)
-                multicast_socket.close()
-                sys.exit(0)
+                data = ""
+                address = ["fe80::2c20:dcff:fe09:3a01%13"]
+                #multicast_socket.close()
+                #sys.exit(0)
             
             print("Received From: " + address[0] + " -> Data: " + data)
             multicast_socket.close()
@@ -100,7 +123,7 @@ if __name__ == '__main__':
             pipeline = None
             try:
                 print('SETTING UP PIPELINE')
-                pipeline = gst.parse_launch(PIPEDEF)
+                pipeline = gst.parse_launch(PIPEDEF_UDP)
             except Exception, e:
                 print("PIPELINE EXCEPTION")
                 print(e)
@@ -112,6 +135,8 @@ if __name__ == '__main__':
             src.set_property("sockfd", video_socket.fileno()) # bind pipeline to correct socket
             pipeline.set_state(gst.STATE_PLAYING)
 
+            textovl = pipeline.get_by_name("textovl")
+
         else:
             threading.Timer(0, send_keepalive_msg, [data_socket,KA_DATA_MSG,peer]).start()
             threading.Timer(0, send_keepalive_msg, [video_socket,KA_VIDEO_MSG,peer]).start()
@@ -122,8 +147,10 @@ if __name__ == '__main__':
             except socket.error, e:
                 print(e)
                 data_socket.close()
+                #glib.source_remove(ioc_sig)
                 sys.exit(0)
             
+            #draw_gaze(textovl, data)
             print (data)
 
         # listen for pipeline status changes

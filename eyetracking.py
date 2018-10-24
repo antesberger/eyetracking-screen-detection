@@ -7,6 +7,8 @@ import glib
 import pygst
 import sys
 import ast
+import datetime
+import os
 
 pygst.require('0.10')
 import gst
@@ -34,27 +36,7 @@ PIPEDEF_UDP =   "udpsrc name=src !" \
             "queue !" \
             "h264parse !" \
             "rtph264pay !" \
-            "udpsink host=127.0.0.1 port=5000"
-
-PIPEDEF_THEORA =   "udpsrc name=src !" \
-            "mpegtsdemux !" \
-            "queue !" \
-            "ffdec_h264 !" \
-            "textoverlay name=textovl text=* halignment=position valignment=position xpad=0  ypad=0 !" \
-            "queue !" \
-            "theoraenc !" \
-            "queue !" \
-            "theoraparse !" \
-            "rtptheorapay !" \
-            "udpsink host=127.0.0.1 port=5000"
-
-PIPEDEF_PLAY =  "udpsrc name=src !" \
-            "mpegtsdemux !" \
-            "queue !" \
-            "ffdec_h264 !" \
-            "identity name=decoded !" \
-            "textoverlay name=textovl text=* halignment=position valignment=position xpad=0  ypad=0 !" \
-            "autovideosink name=video"
+            "udpsink name=sink host=127.0.0.1 port=5000"
 
 def mksock(peer):
     iptype = socket.AF_INET
@@ -75,17 +57,6 @@ def stop_sending_msg():
     global running
     running = False
 
-def draw_gaze(textovl, data):
-    data = ast.literal_eval(data)
-    gp = data.get("gp")
-
-    if gp == None:
-        return
-
-    if gp[0] != 0 and gp[1] != 0:
-        textovl.set_property("xpos", gp[0])
-        textovl.set_property("ypos", gp[1])
-
 if __name__ == '__main__':
         
     # setup video and data socket
@@ -104,10 +75,8 @@ if __name__ == '__main__':
                 data, address = multicast_socket.recvfrom(1024) #fe80::2c20:dcff:fe09:3a01%13
             except socket.error, e:
                 print(e)
-                data = ""
-                address = ["fe80::2c20:dcff:fe09:3a01%13"]
-                #multicast_socket.close()
-                #sys.exit(0)
+                multicast_socket.close()
+                sys.exit(0)
             
             print("Received From: " + address[0] + " -> Data: " + data)
             multicast_socket.close()
@@ -135,23 +104,26 @@ if __name__ == '__main__':
             src.set_property("sockfd", video_socket.fileno()) # bind pipeline to correct socket
             pipeline.set_state(gst.STATE_PLAYING)
 
-            textovl = pipeline.get_by_name("textovl")
+            # create directory the eyetracking data gets stored in
+            eyetracking_directory = './out/{0}'.format(datetime.datetime.now().strftime("%Y-%m-%d-%M"))
+            if not os.path.exists(eyetracking_directory):
+                os.makedirs(eyetracking_directory)
 
         else:
             threading.Timer(0, send_keepalive_msg, [data_socket,KA_DATA_MSG,peer]).start()
             threading.Timer(0, send_keepalive_msg, [video_socket,KA_VIDEO_MSG,peer]).start()
-            
+
             # receiving the data (not the video)
             try:
-               data, address = data_socket.recvfrom(1024)
+                data, address = data_socket.recvfrom(1024)
             except socket.error, e:
                 print(e)
                 data_socket.close()
-                #glib.source_remove(ioc_sig)
                 sys.exit(0)
             
-            #draw_gaze(textovl, data)
-            print (data)
+            # write eyetracking data to file
+            eytracking_file = open(eyetracking_directory + "/eyetracking_data.txt", "a+")
+            eytracking_file.write(data)
 
         # listen for pipeline status changes
         state_change_return, state, pending_state = pipeline.get_state(0)

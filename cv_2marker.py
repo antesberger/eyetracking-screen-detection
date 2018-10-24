@@ -6,6 +6,7 @@ import numpy
 from numpy import array
 import sys
 import datetime
+import json
 
 #gst-launch udpsrc caps="application/x-rtp,payload=127" port=5000 ! rtph264depay ! capsfilter caps="video/x-h264,width=1920,height=1080" ! ffdec_h264 ! autovideosink
 #gst-launch udpsrc caps="application/x-rtp,payload=127" port=5000 ! rtph264depay ! ffdec_h264 ! autovideosink
@@ -13,6 +14,8 @@ import datetime
 
 dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
 frames = Queue.Queue()
+timestamps = Queue.Queue()
+trackingupdate = Queue.Queue()
 frame_width = 0
 frame_height = 0
 recording_flag = True
@@ -26,6 +29,7 @@ class ImageGrabber(threading.Thread):
 
     def run(self):
         global frames
+        global timestamps
         global frame_width
         global frame_height
         global recording_flag 
@@ -36,10 +40,11 @@ class ImageGrabber(threading.Thread):
         while True:
             # TODO: Skip frame for which decoding errors were thrown
             ret,frame = self.stream.read()
-            print(self.stream.get(cv2.CAP_PROP_POS_MSEC))
             if ret == True:
                 frame = cv2.resize(frame, (frame_width/4,frame_height/4))
                 frames.put(frame)
+                #print(self.stream.get(cv2.CAP_PROP_POS_MSEC))
+                timestamps.put(self.stream.get(cv2.CAP_PROP_POS_MSEC) * 1000)
             else:
                 recording_flag = False
                 self.stream.release()
@@ -85,9 +90,11 @@ class Main(threading.Thread):
 
     def run(self):
         global frames
+        global timestamps
         global frame_width
         global frame_height
         global recording_flag
+        global trackingupdate
 
         self.marker_size = 62 #rectangular (mm)
         self.screen_height = 110 #mm
@@ -95,8 +102,7 @@ class Main(threading.Thread):
         
         self.corner_refine_criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
-
-        filename = './out/output_{0}.avi'.format(datetime.datetime.now().strftime("%Y-%m-%d-%M"))
+        filename = './out/2018-10-24-10/video.avi'
         out = cv2.VideoWriter(filename,cv2.VideoWriter_fourcc('M','J','P','G'), 25, (620,1100))
 
         cv2.useOptimized()
@@ -104,7 +110,8 @@ class Main(threading.Thread):
         while not (frames.qsize() == 0 and recording_flag == False):
             if(not frames.empty()):
                 self.current_frame = frames.get()
-                #print(cv2.CAP_PROP_POS_MSEC)
+                self.current_timestamp = timestamps.get()
+
                 #print(frames.qsize())
                 frame_gray = cv2.cvtColor(self.current_frame, cv2.COLOR_BGR2GRAY) # aruco.detectMarkers() requires gray image
                 markers = cv2.aruco.detectMarkers(frame_gray,dictionary)
@@ -185,6 +192,7 @@ class Main(threading.Thread):
                     M = cv2.getPerspectiveTransform(pts1,pts2)
                     self.current_frame = cv2.warpPerspective(self.current_frame,M,(self.screen_width*3,self.screen_height*3))
                     
+                    trackingupdate.put((self.current_timestamp, [screen_top_left, screen_top_right, screen_bottom_right, screen_bottom_left]))
                     out.write(self.current_frame)
 
                 cv2.imshow('frame',self.current_frame)
@@ -195,17 +203,55 @@ class Main(threading.Thread):
         cv2.destroyAllWindows()
         sys.exit(0)
 
+class trackingprocessor(threading.Thread):
+    def __init(self):
+        threading.Thread.__init(self)
+
+    def run(self):
+        global trackingupdate
+        self.initial_timestamp = 0
+
+        #filename = './out/{0}/video.avi'.format(datetime.datetime.now().strftime("%Y-%m-%d-%M"))
+        directory = './out/2018-10-24-04/'
+        self.trackingdata = open(directory + 'eyetracking_data_raw.txt', 'r+')
+        self.processeddata = open(directory + "/eyetracking_data_processed.txt", "a+")
+        
+        while True:
+            if(not trackingupdate.empty()):
+                current_timestamp, coordinates = trackingupdate.get()
+
+                print('getting new ts')
+
+                while self.initial_timestamp == 0 or line['ts'] <= current_timestamp:
+                    line = self.trackingdata.readline()
+                    line = json.loads(line)
+
+                    if self.initial_timestamp == 0:
+                        self.initial_timestamp = line['ts']
+                    
+                    line['ts']  = line['ts'] - self.initial_timestamp
+                    print(str(line['ts']) + ' < ' + str(current_timestamp))
+
+                    # TODO: recompute gp coodinate
+                    if 'gp' in line:
+                        line['gp'] = 'HIIIER'
+
+                    self.processeddata.write(json.dumps(line) + '\n')
+
 grabber = ImageGrabber(0)
 main = Main()
 main2 = Main()
 main3 = Main()
+trackingprocessor = trackingprocessor()
 
 grabber.start()
 main.start()
-main2.start()
-main3.start()
+# main2.start()
+# main3.start()
+trackingprocessor.start()
 
 grabber.join()
 main.join()
-main2.join()
-main3.join()
+# main2.join()
+# main3.join()
+trackingprocessor.join()

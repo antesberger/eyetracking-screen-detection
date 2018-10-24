@@ -108,6 +108,7 @@ if __name__ == '__main__':
             eyetracking_directory = './out/{0}'.format(datetime.datetime.now().strftime("%Y-%m-%d-%M"))
             if not os.path.exists(eyetracking_directory):
                 os.makedirs(eyetracking_directory)
+            eytracking_file = open(eyetracking_directory + "/eyetracking_data_raw.txt", "a+")
 
         else:
             threading.Timer(0, send_keepalive_msg, [data_socket,KA_DATA_MSG,peer]).start()
@@ -122,7 +123,6 @@ if __name__ == '__main__':
                 sys.exit(0)
             
             # write eyetracking data to file
-            eytracking_file = open(eyetracking_directory + "/eyetracking_data.txt", "a+")
             eytracking_file.write(data)
 
         # listen for pipeline status changes

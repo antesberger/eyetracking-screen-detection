@@ -62,10 +62,7 @@ class Main(threading.Thread):
         self.screen_height = 110 #mm
         self.screen_width = 62 #mm
         
-        self.corner_refine_criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-
-
-        filename = './out/output_{0}.avi'.format(datetime.datetime.now().strftime("%Y-%m-%d-%M"))
+        filename = './out/{0}/video.avi'.format(datetime.datetime.now().strftime("%Y-%m-%d-%M"))
         out = cv2.VideoWriter(filename,cv2.VideoWriter_fourcc('M','J','P','G'), 25, (620,1100))
 
         cv2.useOptimized()

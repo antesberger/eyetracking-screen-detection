@@ -16,6 +16,9 @@ frame_width = 0
 frame_height = 0
 recording_flag = True
 
+dist = [[ -2.49084216e-02, 2.80228077e-01, -8.09293716e-06, 2.88316526e-04, -6.39280807e-01]]
+cameraMatrix = [[ 734.71252441, 0., 806.11233199][0., 686.70733643, 377.31751302][0.,0.,1.,]]
+
 class ImageGrabber(threading.Thread):
     def __init__(self, ID):
         threading.Thread.__init__(self)

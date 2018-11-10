@@ -1,2 +1,7 @@
 out/
 gst installer/
+markers/frames/
+markers/
+outpy.avi
+calibresult.png
+pattern.png

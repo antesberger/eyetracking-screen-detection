@@ -105,7 +105,7 @@ if __name__ == '__main__':
             pipeline.set_state(gst.STATE_PLAYING)
 
             # create directory the eyetracking data gets stored in
-            eyetracking_directory = './out/{0}'.format(datetime.datetime.now().strftime("%Y-%m-%d-%M"))
+            eyetracking_directory = './out/{0}'.format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"))
             if not os.path.exists(eyetracking_directory):
                 os.makedirs(eyetracking_directory)
             eytracking_file = open(eyetracking_directory + "/eyetracking_data_raw.txt", "a+")

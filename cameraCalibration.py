@@ -9,9 +9,9 @@ objp = np.zeros((6*9,3), np.float32)
 objp[:,:2] = np.mgrid[0:9,0:6].T.reshape(-1,2)
 framecount = 0
 buffer = '000'
-firstimg = cv2.imread('./markers/frames/frame-0001.jpg',0)
+firstimg = cv2.imread('./markers/frames2/frame-0001.jpg',0)
 
-while framecount < 407:
+while framecount < 537:
     framecount += 5
 
     if framecount == 10:
@@ -19,7 +19,7 @@ while framecount < 407:
     elif framecount == 100:
         buffer = '0'
 
-    path = './markers/frames/frame-' + buffer + str(framecount) + '.jpg'
+    path = './markers/frames2/frame-' + buffer + str(framecount) + '.jpg'
     print path
     img = cv2.imread(path, 0)
     if img is not None:
@@ -46,6 +46,8 @@ print('dist')
 print(dist)
 print('newcameramtx')
 print(newcameramtx)
+print('mtx')
+print(mtx)
 
 dst = cv2.undistort(firstimg, mtx, dist, None, newcameramtx)
 cv2.imwrite('calibresult.png', dst)

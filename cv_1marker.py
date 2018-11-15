@@ -5,50 +5,48 @@ import Queue
 import numpy
 from numpy import array
 import sys
-
-#gst-launch udpsrc caps="application/x-rtp,payload=127" port=5000 ! rtph264depay ! capsfilter caps="video/x-h264,width=1920,height=1080" ! ffdec_h264 ! autovideosink
-#gst-launch udpsrc caps="application/x-rtp,payload=127" port=5000 ! rtph264depay ! ffdec_h264 ! autovideosink
-#"udpsrc caps=application/x-rtp,payload=127 port=5000 ! rtph264depay ! ffdec_h264 ! appsink name=opencvsink"
+import datetime
+import json
 
 dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
 frames = Queue.Queue()
+timestamps = Queue.Queue()
+trackingupdate = Queue.Queue()
 frame_width = 0
 frame_height = 0
 recording_flag = True
-
-dist = [[ -2.49084216e-02, 2.80228077e-01, -8.09293716e-06, 2.88316526e-04, -6.39280807e-01]]
-cameraMatrix = [[ 734.71252441, 0., 806.11233199][0., 686.70733643, 377.31751302][0.,0.,1.,]]
+quality = 1 # size of the input video. 1 == 1920*1080
+outputQuality = 2 # size of the cropped output avi file. 1 == nexus5 screen size (1080*1920), 2 == 1/2 ... 
 
 class ImageGrabber(threading.Thread):
     def __init__(self, ID):
         threading.Thread.__init__(self)
         self.ID=ID
-        #self.stream = cv2.VideoCapture(config.sdp")
-        self.stream = cv2.VideoCapture("./markers/test13.mp4")
+        #self.stream = cv2.VideoCapture("config.sdp")
+        self.stream = cv2.VideoCapture("./markers/test18.mp4")
 
     def run(self):
         global frames
         global frame_width
         global frame_height
         global recording_flag 
+        global quality
         
         frame_width = int(self.stream.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(self.stream.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         while True:
-            # TODO: Skip frame for which decoding errors were thrown
-            ret,frame = self.stream.read()
-
-            if ret == True:
-                frame = cv2.resize(frame, (frame_width/2,frame_height/2))
-                frames.put(frame)
-            else:
+            try:
+                ret,frame = self.stream.read()
+                if ret == True:
+                    frame = cv2.resize(frame, (frame_width/quality,frame_height/quality))
+                    frames.put(frame)
+                    timestamps.put(self.stream.get(cv2.CAP_PROP_POS_MSEC) * 1000)
+            except:
                 recording_flag = False
                 self.stream.release()
-                print("couldn't capture frame")
+                print('Stream ended')
                 break
-
-            #time.sleep(0.025)
 
 class Main(threading.Thread):
     def __init(self):
@@ -66,26 +64,65 @@ class Main(threading.Thread):
             shift=0
         )
 
+    # origin o to desitnation d
+    def intersection(self, p1, p2, p3, p4):
+        a1 = array([p1[0], p1[1]])
+        a2 = array([p2[0], p2[1]])
+        b1 = array([p3[0], p3[1]])
+        b2 = array([p4[0], p4[1]])
+
+        da = a2-a1
+        db = b2-b1
+        dp = a1-b1
+
+        dap = array( [0.0, 0.0] )
+        dap[0] = -da[1]
+        dap[1] = da[0]
+
+        denom = numpy.dot( dap, db)
+        num = numpy.dot( dap, dp )
+        return (num / denom.astype(float))*db + b1
+
     def run(self):
         global frames
+        global timestamps
         global frame_width
         global frame_height
-        global recording_flag
+        global trackingupdate
+        global quality
+        global outputQuality # of the cropped video
 
         self.marker_size = 62 #rectangular (mm)
+        self.secondary_marker_size = 20
         self.screen_height = 110 #mm
         self.screen_width = 62 #mm
+        self.screen_pixel_height = 1920
+        self.screen_pixel_width = 1080
         
+        self.dist = numpy.array([[0.05357947, -0.22872005, -0.00118557, -0.00126952, 0.2067489 ]])
+        self.cameraMatrix = numpy.array([[1.12585498e+03, 0.00000000e+00, 9.34478069e+02], [0.00000000e+00, 1.10135217e+03, 5.84380561e+02], [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
+        self.mtx = numpy.array([[1.12825274e+03, 0.00000000e+00, 9.35684715e+02], [0.00000000e+00, 1.10801151e+03, 5.86151765e+02], [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
         self.corner_refine_criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
-        out = cv2.VideoWriter('outpy.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 25, (620,1100))
-
+        #directory = './out/{0}'.format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"))
+        directory = './out/2018-11-15-12-38/'
+        videoFilename_processed = 'gaze_video_processed.avi'
+        videoFilename_raw = 'gaze_video_raw.avi'
+        fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
+        firstFrame = frames.get()
+        inputHeight, inputWidth, c = firstFrame.shape
+        out_processed = cv2.VideoWriter(directory + videoFilename_processed,fourcc, 25, (self.screen_pixel_width/outputQuality,self.screen_pixel_height/outputQuality))
+        out_raw = cv2.VideoWriter(directory + videoFilename_raw,fourcc, 25, (inputWidth,inputHeight))
         cv2.useOptimized()
 
         while not (frames.qsize() == 0 and recording_flag == False):
             if(not frames.empty()):
                 self.current_frame = frames.get()
+                self.current_timestamp = timestamps.get()
+
+                out_raw.write(self.current_frame)
                 #print(frames.qsize())
+                self.current_frame = cv2.undistort(self.current_frame, self.mtx, self.dist, None, self.cameraMatrix)
                 frame_gray = cv2.cvtColor(self.current_frame, cv2.COLOR_BGR2GRAY) # aruco.detectMarkers() requires gray image
                 markers = cv2.aruco.detectMarkers(frame_gray,dictionary)
 
@@ -95,89 +132,138 @@ class Main(threading.Thread):
                     corners, ids, rejectedImgPoints = markers
 
                     #get index of marker with id == 0
+                    # bottom left == id1, bottom right = id3
                     try:
                         id0 = ids.tolist().index([0])
                     except:
-                        print("No marker with id == 0 detected")
+                        #print("No marker with id == 0 detected")
                         continue
 
                     #corners = array(corners)
                     term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, 30, 0.1)
-                    corners[id0] = cv2.cornerSubPix(frame_gray, corners[id0], (5, 5), (-1, -1), term)
+                    corners_id0 = cv2.cornerSubPix(frame_gray, corners[id0], (5, 5), (-1, -1), term)
+                    rvec, tvec, objPoints = cv2.aruco.estimatePoseSingleMarkers(corners_id0, self.marker_size, self.cameraMatrix, self.dist) #tvec is the translation vector of the markers center
 
-                    marker_top_left_x = int(corners[id0][0][0][0])
-                    marker_top_left_y = int(corners[id0][0][0][1])
-                    marker_top_right_x = int(corners[id0][0][1][0])
-                    marker_top_right_y = int(corners[id0][0][1][1])
-                    marker_bottom_left_x = int(corners[id0][0][3][0])
-                    marker_bottom_left_y = int(corners[id0][0][3][1])
-                    marker_bottom_right_x = int(corners[id0][0][2][0])
-                    marker_bottom_right_y = int(corners[id0][0][2][1])
+                    screenCorners = numpy.float32([
+                        [-self.marker_size/2, -self.marker_size/2 - 1, 0],
+                        [self.marker_size/2, -self.marker_size/2 - 1, 0],
+                        [-self.marker_size/2,-self.marker_size/2 - self.screen_height - 1,0], #todo
+                        [self.marker_size/2,-self.marker_size/2 - self.screen_height - 1,0] #tofdo
+                    ]).reshape(-1,3)
+                    imgpts, jac = cv2.projectPoints(screenCorners, rvec, tvec, self.mtx, self.dist) #world coordinates to camera coordinates
+                    #self.current_frame = cv2.aruco.drawAxis(self.current_frame, self.cameraMatrix, self.dist, rvec, tvec, 100)
 
-                    self.drawCircle(self.current_frame, marker_top_left_x, marker_top_left_y)
-                    self.drawCircle(self.current_frame, marker_top_right_x, marker_top_right_y)
-                    self.drawCircle(self.current_frame, marker_bottom_right_x, marker_bottom_right_y)
-                    self.drawCircle(self.current_frame, marker_bottom_left_x, marker_bottom_left_y)
+                    screen_top_left = imgpts[0][0]
+                    screen_top_right = imgpts[1][0]
+                    screen_bottom_left = imgpts[2][0]
+                    screen_bottom_right = imgpts[3][0]
 
-                    #estimate 1mm = ?px
-                    marker_height = numpy.sqrt(numpy.power(marker_bottom_left_y - marker_top_left_y, 2))
-                    mm2px_height = marker_height / float(self.marker_size)
-                    marker_width = numpy.sqrt(numpy.power(marker_top_right_x - marker_top_left_x,2))
-                    mm2px_width = marker_width / float(self.marker_size)
+                    id1 = None
+                    id3 = None
+                    
+                    try:
+                        id1 = ids.tolist().index([1])
+                        secondary_id = id1
+                    except:
+                        pass
+
+                    try:
+                        id3 = ids.tolist().index([3])
+                        secondary_id = id3
+                    except:
+                        pass
+                    
+                    if id1 or id3 is not None:
+                        corners_secondary = cv2.cornerSubPix(frame_gray, corners[secondary_id], (5, 5), (-1, -1), term)
+                        rvec, tvec, objPoints = cv2.aruco.estimatePoseSingleMarkers(corners_secondary, self.secondary_marker_size, self.cameraMatrix, self.dist)
+
+                        screenCorners = numpy.float32([ # bottom markers are upsidedown
+                            [self.secondary_marker_size/2, -self.secondary_marker_size/2 - 1, 0],
+                            [-self.secondary_marker_size/2, -self.secondary_marker_size/2 - 1, 0]
+                        ]).reshape(-1,3) 
+                        imgpts, jac = cv2.projectPoints(screenCorners, rvec, tvec, self.mtx, self.dist) #world coordinates to camera coordinates
+
+                        secondary_marker_top_left = imgpts[0][0]
+                        secondary_marker_top_right = imgpts[1][0]
+
+                        if id3 is not None:
+                            screen_bottom_left = secondary_marker_top_left
+                            screen_bottom_right = self.intersection(corners_id0[0][1],corners_id0[0][2],secondary_marker_top_left,secondary_marker_top_right) 
+                        else:
+                            screen_bottom_right = secondary_marker_top_right
+                            screen_bottom_left = self.intersection(corners_id0[0][0],corners_id0[0][3],secondary_marker_top_right,secondary_marker_top_left) 
+                                    
+                        #self.current_frame = cv2.aruco.drawAxis(self.current_frame, self.cameraMatrix, self.dist, rvec, tvec, 100)
+
+                    # self.drawCircle(self.current_frame, screen_top_left[0], screen_top_left[1])
+                    # self.drawCircle(self.current_frame, screen_top_right[0], screen_top_right[1])
+                    # self.drawCircle(self.current_frame, screen_bottom_left[0], screen_bottom_left[1])
+                    # self.drawCircle(self.current_frame, screen_bottom_right[0], screen_bottom_right[1])
 
                     #Transform perspective according to QR code corner coordinates
-                    pts1 = numpy.float32([
-                        [marker_top_left_x,marker_top_left_y],
-                        [marker_top_right_x,marker_top_right_y],
-                        [marker_bottom_left_x,marker_bottom_left_y],
-                        [marker_bottom_right_x,marker_bottom_right_y]
-                    ])
-
-                    pts2 = numpy.float32([[0,0],[marker_width,0],[0,marker_height],[marker_width,marker_height]])
+                    pts1 = numpy.float32([screen_top_left, screen_top_right, screen_bottom_left, screen_bottom_right])
+                    pts2 = numpy.float32([[0,0],[self.screen_pixel_width/outputQuality,0],[0,self.screen_pixel_height/outputQuality],[self.screen_pixel_width/outputQuality,self.screen_pixel_height/outputQuality]])
 
                     M = cv2.getPerspectiveTransform(pts1,pts2)
-                    self.current_frame = cv2.warpPerspective(self.current_frame,M,(frame_width/2,frame_height/2))
-
-
-                    px_screen_height = (1 * mm2px_height) + (self.screen_height * (marker_width / self.screen_width))
+                    self.current_frame = cv2.warpPerspective(self.current_frame,M,(self.screen_pixel_width/outputQuality,self.screen_pixel_height/outputQuality))
                     
-                    #cropping
-                    pts3 = numpy.float32([
-                        [0, marker_width + (1 * mm2px_height)], # marker has 1mm padding bottom
-                        [marker_width,marker_height + (1 * mm2px_height)],
-                        [0, marker_height + px_screen_height],
-                        [marker_width,  marker_height + px_screen_height]
-                    ])
- 
-                    pts4 = numpy.float32([[0,0],[marker_width,0],[0,self.screen_height * mm2px_height],[marker_width,self.screen_height * mm2px_height]])
-
-                    M = cv2.getPerspectiveTransform(pts3,pts4)
-                    self.current_frame = cv2.warpPerspective(self.current_frame,M,(int(marker_width),int(px_screen_height)))
-
-                    # make frames uniform in size and undo initial resizing
-                    #self.current_frame = cv2.resize(self.current_frame, (int(marker_width)*2, int(px_screen_height)*2))
-
-                    out.write(self.current_frame)
+                    trackingupdate.put((self.current_timestamp, [screen_top_left, screen_top_right, screen_bottom_right, screen_bottom_left]))
+                    out_processed.write(self.current_frame)
 
                 cv2.imshow('frame',self.current_frame)
-
                 cv2.waitKey(100)
 
-        out.release()
+        out_processed.release()
+        out_raw.release()
         cv2.destroyAllWindows()
         sys.exit(0)
 
+class trackingprocessor(threading.Thread):
+    def __init(self):
+        threading.Thread.__init(self)
+
+    def run(self):
+        global trackingupdate
+        self.initial_timestamp = 0
+
+        #directory = './out/{0}'.format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"))
+        directory = './out/2018-11-15-12-38/'
+        self.trackingdata = open(directory + 'eyetracking_data_raw.txt', 'r+')
+        self.processeddata = open(directory + "/eyetracking_data_processed.txt", "a+")
+        
+        while not (trackingupdate.qsize() == 0 and recording_flag == False):
+            current_timestamp, coordinates = trackingupdate.get()
+
+            while self.initial_timestamp == 0 or line['ts'] <= current_timestamp:
+                line = self.trackingdata.readline()
+                line = json.loads(line)
+
+                if self.initial_timestamp == 0:
+                    self.initial_timestamp = line['ts']
+                
+                line['ts']  = line['ts'] - self.initial_timestamp
+                #print(str(line['ts']) + ' < ' + str(current_timestamp))
+
+                # TODO: recompute gp coodinate
+                if 'gp' in line:
+                    line['gp'] = 'HIIIER'
+
+                self.processeddata.write(json.dumps(line) + '\n')
+
 grabber = ImageGrabber(0)
 main = Main()
-main2 = Main()
-main3 = Main()
+#main2 = Main()
+#main3 = Main()
+trackingprocessor = trackingprocessor()
 
 grabber.start()
 main.start()
-main2.start()
-main3.start()
+# main2.start()
+# main3.start()
+trackingprocessor.start()
 
 grabber.join()
 main.join()
-main2.join()
-main3.join()
+# main2.join()
+# main3.join()
+trackingprocessor.join()

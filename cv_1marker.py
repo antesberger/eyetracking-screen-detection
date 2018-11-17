@@ -139,7 +139,6 @@ class Main(threading.Thread):
                         #print("No marker with id == 0 detected")
                         continue
 
-                    #corners = array(corners)
                     term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, 30, 0.1)
                     corners_id0 = cv2.cornerSubPix(frame_gray, corners[id0], (5, 5), (-1, -1), term)
                     rvec, tvec, objPoints = cv2.aruco.estimatePoseSingleMarkers(corners_id0, self.marker_size, self.cameraMatrix, self.dist) #tvec is the translation vector of the markers center
@@ -207,7 +206,7 @@ class Main(threading.Thread):
                     M = cv2.getPerspectiveTransform(pts1,pts2)
                     self.current_frame = cv2.warpPerspective(self.current_frame,M,(self.screen_pixel_width/outputQuality,self.screen_pixel_height/outputQuality))
                     
-                    trackingupdate.put((self.current_timestamp, [screen_top_left, screen_top_right, screen_bottom_right, screen_bottom_left]))
+                    trackingupdate.put((self.current_timestamp, M))
                     out_processed.write(self.current_frame)
 
                 cv2.imshow('frame',self.current_frame)
@@ -231,8 +230,8 @@ class trackingprocessor(threading.Thread):
         self.trackingdata = open(directory + 'eyetracking_data_raw.txt', 'r+')
         self.processeddata = open(directory + "/eyetracking_data_processed.txt", "a+")
         
-        while not (trackingupdate.qsize() == 0 and recording_flag == False):
-            current_timestamp, coordinates = trackingupdate.get()
+        while not (trackingupdate.qsize()   == 0 and recording_flag == False):
+            current_timestamp, gazeShiftMtx = trackingupdate.get()
 
             while self.initial_timestamp == 0 or line['ts'] <= current_timestamp:
                 line = self.trackingdata.readline()
@@ -244,9 +243,10 @@ class trackingprocessor(threading.Thread):
                 line['ts']  = line['ts'] - self.initial_timestamp
                 #print(str(line['ts']) + ' < ' + str(current_timestamp))
 
-                # TODO: recompute gp coodinate
                 if 'gp' in line:
-                    line['gp'] = 'HIIIER'
+                    gp = numpy.array([[line['gp']]], dtype = "float32")
+                    new_gp = cv2.perspectiveTransform(gp, gazeShiftMtx)
+                    line['gp'] = str(new_gp[0][0])
 
                 self.processeddata.write(json.dumps(line) + '\n')
 

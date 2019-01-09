@@ -15,15 +15,15 @@ trackingupdate = Queue.Queue()
 frame_width = 0
 frame_height = 0
 recording_flag = True
-quality = 1 # size of the input video. 1 == 1920*1080
+quality = 2 # size of the input video. 1 == 1920*1080
 outputQuality = 2 # size of the cropped output avi file. 1 == nexus5 screen size (1080*1920), 2 == 1/2 ... 
 
 class ImageGrabber(threading.Thread):
     def __init__(self, ID):
         threading.Thread.__init__(self)
         self.ID=ID
-        #self.stream = cv2.VideoCapture("config.sdp")
-        self.stream = cv2.VideoCapture("./markers/test18.mp4")
+        self.stream = cv2.VideoCapture("config.sdp")
+        #self.stream = cv2.VideoCapture("./markers/test18.mp4")
 
     def run(self):
         global frames
@@ -41,7 +41,7 @@ class ImageGrabber(threading.Thread):
                 if ret == True:
                     frame = cv2.resize(frame, (frame_width/quality,frame_height/quality))
                     frames.put(frame)
-                    timestamps.put(self.stream.get(cv2.CAP_PROP_POS_MSEC) * 1000)
+                    timestamps.put(self.stream.get(cv2.CAP_PROP_POS_MSEC) * 1000000)
             except:
                 recording_flag = False
                 self.stream.release()
@@ -92,20 +92,24 @@ class Main(threading.Thread):
         global quality
         global outputQuality # of the cropped video
 
-        self.marker_size = 62 #rectangular (mm)
+        self.processed_frames = 0
+        self.success_frames = 0
+        self.error_frames = 0
+
+        self.marker_size = 66 #rectangular (mm)
         self.secondary_marker_size = 20
-        self.screen_height = 110 #mm
-        self.screen_width = 62 #mm
-        self.screen_pixel_height = 1920
-        self.screen_pixel_width = 1080
+        self.screen_height = 130 #mm
+        self.screen_width = 66 #mm
+        self.screen_pixel_height = 2880
+        self.screen_pixel_width = 1440
         
         self.dist = numpy.array([[0.05357947, -0.22872005, -0.00118557, -0.00126952, 0.2067489 ]])
         self.cameraMatrix = numpy.array([[1.12585498e+03, 0.00000000e+00, 9.34478069e+02], [0.00000000e+00, 1.10135217e+03, 5.84380561e+02], [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
         self.mtx = numpy.array([[1.12825274e+03, 0.00000000e+00, 9.35684715e+02], [0.00000000e+00, 1.10801151e+03, 5.86151765e+02], [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
         self.corner_refine_criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
-        #directory = './out/{0}'.format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"))
-        directory = './out/2018-11-15-12-38/'
+        directory = './out/{0}/'.format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"))
+        #directory = './out/2018-11-15-12-38/'
         videoFilename_processed = 'gaze_video_processed.avi'
         videoFilename_raw = 'gaze_video_raw.avi'
         fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
@@ -121,22 +125,27 @@ class Main(threading.Thread):
                 self.current_timestamp = timestamps.get()
 
                 out_raw.write(self.current_frame)
-                #print(frames.qsize())
                 self.current_frame = cv2.undistort(self.current_frame, self.mtx, self.dist, None, self.cameraMatrix)
                 frame_gray = cv2.cvtColor(self.current_frame, cv2.COLOR_BGR2GRAY) # aruco.detectMarkers() requires gray image
                 markers = cv2.aruco.detectMarkers(frame_gray,dictionary)
 
+                self.processed_frames += 1
                 if len(markers[0]) > 0:
 
                     # array order of corners is clockwise
                     corners, ids, rejectedImgPoints = markers
 
-                    #get index of marker with id == 0
+                    # get index of marker with id == 0
                     # bottom left == id1, bottom right = id3
                     try:
                         id0 = ids.tolist().index([0])
                     except:
-                        #print("No marker with id == 0 detected")
+                        # No marker with id == 0 detected
+                        self.error_frames += 1
+                        print('markers detected but the main one is not amongst them.')
+                        print(str(self.success_frames) + ' / ' + str(self.processed_frames) + ' -> ' + str(self.error_frames) + ' errors' + ' (' + str((float(self.error_frames) / float(self.processed_frames)) * float(100)) + '%), (' + str(frames.qsize()) + ' buffered)')
+                        #cv2.imshow('frame',self.current_frame)
+                        #cv2.waitKey(100)
                         continue
 
                     term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, 30, 0.1)
@@ -146,11 +155,11 @@ class Main(threading.Thread):
                     screenCorners = numpy.float32([
                         [-self.marker_size/2, -self.marker_size/2 - 1, 0],
                         [self.marker_size/2, -self.marker_size/2 - 1, 0],
-                        [-self.marker_size/2,-self.marker_size/2 - self.screen_height - 1,0], #todo
-                        [self.marker_size/2,-self.marker_size/2 - self.screen_height - 1,0] #tofdo
+                        [-self.marker_size/2,-self.marker_size/2 - (self.screen_height + 20) - 1,0], #todo
+                        [self.marker_size/2,-self.marker_size/2 - (self.screen_height + 20) - 1,0] #tofdo
                     ]).reshape(-1,3)
                     imgpts, jac = cv2.projectPoints(screenCorners, rvec, tvec, self.mtx, self.dist) #world coordinates to camera coordinates
-                    #self.current_frame = cv2.aruco.drawAxis(self.current_frame, self.cameraMatrix, self.dist, rvec, tvec, 100)
+                    self.current_frame = cv2.aruco.drawAxis(self.current_frame, self.cameraMatrix, self.dist, rvec, tvec, 100)
 
                     screen_top_left = imgpts[0][0]
                     screen_top_right = imgpts[1][0]
@@ -192,7 +201,7 @@ class Main(threading.Thread):
                             screen_bottom_right = secondary_marker_top_right
                             screen_bottom_left = self.intersection(corners_id0[0][0],corners_id0[0][3],secondary_marker_top_right,secondary_marker_top_left) 
                                     
-                        #self.current_frame = cv2.aruco.drawAxis(self.current_frame, self.cameraMatrix, self.dist, rvec, tvec, 100)
+                        self.current_frame = cv2.aruco.drawAxis(self.current_frame, self.cameraMatrix, self.dist, rvec, tvec, 100)
 
                     # self.drawCircle(self.current_frame, screen_top_left[0], screen_top_left[1])
                     # self.drawCircle(self.current_frame, screen_top_right[0], screen_top_right[1])
@@ -208,9 +217,23 @@ class Main(threading.Thread):
                     
                     trackingupdate.put((self.current_timestamp, M))
                     out_processed.write(self.current_frame)
+                    frames.task_done()
+                    timestamps.task_done()
 
-                cv2.imshow('frame',self.current_frame)
-                cv2.waitKey(100)
+                    self.success_frames += 1
+
+                else:
+                    #log frames without detected marker
+                    errorlog = open(directory + 'log.txt', 'a+')
+                    errorlog.write('no markers detected at ts: ' + str(self.current_timestamp) + '\n')
+                    errorlog.close()
+
+                    #command line feedback for success rate
+                    self.error_frames +=1 
+                    
+                print(str(self.success_frames) + ' / ' + str(self.processed_frames) + ' -> ' + str(self.error_frames) + ' errors' + ' (' + str((float(self.error_frames) / float(self.processed_frames)) * float(100)) + '%), (' + str(frames.qsize()) + ' buffered)')
+                #cv2.imshow('frame',self.current_frame)
+                #cv2.waitKey(100)
 
         out_processed.release()
         out_raw.release()
@@ -220,17 +243,17 @@ class Main(threading.Thread):
 class trackingprocessor(threading.Thread):
     def __init(self):
         threading.Thread.__init(self)
-
     def run(self):
         global trackingupdate
         self.initial_timestamp = 0
+        self.currentNewTs = 0
+        self.currentNewTs_relative = 0
 
-        #directory = './out/{0}'.format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"))
-        directory = './out/2018-11-15-12-38/'
-        self.trackingdata = open(directory + 'eyetracking_data_raw.txt', 'r+')
+        directory = './out/{0}'.format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"))
+        open(directory + '/eyetracking_data_raw.txt', 'a').close() #initialize file because this would normally be created later by eyetracking.py
+        self.trackingdata = open(directory + '/eyetracking_data_raw.txt', 'r+')
         self.processeddata = open(directory + "/eyetracking_data_processed.txt", "a+")
-        
-        while not (trackingupdate.qsize()   == 0 and recording_flag == False):
+        while not (trackingupdate.empty() and recording_flag == False):
             current_timestamp, gazeShiftMtx = trackingupdate.get()
 
             while self.initial_timestamp == 0 or line['ts'] <= current_timestamp:
@@ -239,31 +262,28 @@ class trackingprocessor(threading.Thread):
 
                 if self.initial_timestamp == 0:
                     self.initial_timestamp = line['ts']
-                
-                line['ts']  = line['ts'] - self.initial_timestamp
+
+                line['ts'] = line['ts'] - self.initial_timestamp
                 #print(str(line['ts']) + ' < ' + str(current_timestamp))
 
                 if 'gp' in line:
                     gp = numpy.array([[line['gp']]], dtype = "float32")
                     new_gp = cv2.perspectiveTransform(gp, gazeShiftMtx)
-                    line['gp'] = str(new_gp[0][0])
+                    line['ts'] = self.currentNewTs_relative
 
                 self.processeddata.write(json.dumps(line) + '\n')
 
 grabber = ImageGrabber(0)
 main = Main()
 #main2 = Main()
-#main3 = Main()
 trackingprocessor = trackingprocessor()
 
 grabber.start()
 main.start()
-# main2.start()
-# main3.start()
+#main2.start()
 trackingprocessor.start()
 
 grabber.join()
 main.join()
-# main2.join()
-# main3.join()
+#main2.join()
 trackingprocessor.join()

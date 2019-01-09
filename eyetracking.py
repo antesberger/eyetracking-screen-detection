@@ -9,6 +9,9 @@ import sys
 import ast
 import datetime
 import os
+import urllib2
+import json
+import atexit
 
 pygst.require('0.10')
 import gst
@@ -23,6 +26,7 @@ stream_init = False
 running = True
 timeout = 1.0
 count = 0
+recording_id = ''
 
 KA_DATA_MSG = "{\"type\": \"live.data.unicast\", \"key\": \"ab305939-5a40-46c0-b08b-15b901adc6b1\", \"op\": \"start\"}"
 KA_VIDEO_MSG = "{\"type\": \"live.video.unicast\", \"key\": \"a178c5e8-e683-411a-9c4c-fcc630ac642e\", \"op\": \"start\"}"
@@ -57,6 +61,106 @@ def stop_sending_msg():
     global running
     running = False
 
+def create_project(address):
+    json_data = post_request(address, '/api/projects')
+    return json_data['pr_id']
+
+def create_participant(address,project_id):
+    data = {'pa_project': project_id}
+    json_data = post_request(address, '/api/participants', data)
+    return json_data['pa_id']
+
+def create_calibration(address, project_id, participant_id):
+    data = {'ca_project': project_id, 'ca_type': 'default', 'ca_participant': participant_id}
+    json_data = post_request(address, '/api/calibrations', data)
+    return json_data['ca_id']
+
+def create_recording(address, participant_id):
+    data = {'rec_participant': participant_id}
+    json_data = post_request(address, '/api/recordings', data)
+    return json_data['rec_id']
+
+def start_recording(address, recording_id):
+    post_request(address, '/api/recordings/' + recording_id + '/start')
+
+def stop_recording(address, recording_id):
+    post_request(address, '/api/recordings/' + recording_id + '/stop')
+
+def start_calibration(address, calibration_id):
+    post_request(address, '/api/calibrations/' + calibration_id + '/start')
+
+def post_request(url, api_action, data=None):
+    req = urllib2.Request(url + api_action)
+    req.add_header('Content-Type', 'application/json')
+    data = json.dumps(data)
+    response = urllib2.urlopen(req, data)
+    data = response.read()
+    json_data = json.loads(data)
+    return json_data
+
+
+def wait_for_status(url, api_action, key, values, calibration_id, participant_id):
+    waiting = True
+    while waiting:
+        req = urllib2.Request(url + api_action)
+        req.add_header('Content-Type', 'application/json')
+        response = urllib2.urlopen(req, None)
+        data = response.read()
+        json_data = json.loads(data)
+
+        if json_data['ca_state'] == 'calibrated':
+            waiting = False
+            print '\ncalibration successfull'
+            time.sleep(0.5)
+        
+        elif json_data['ca_state'] == 'failed':
+            yes = {'yes','y', 'ye', ''}
+            no = {'no','n'}
+
+            print '\ncalibration failed'
+            time.sleep(0.5)
+            choice = raw_input("type 'yes' to retry or 'no' to use the default calibration >>\n").lower()
+            if choice in yes:
+                setup(url)
+                break
+            elif choice in no:
+                waiting = False
+                print '\nusing default calibration'
+            else: 
+                choice = raw_input("type 'yes' to retry or 'no' to use the default calibration >>\n").lower()
+                
+        time.sleep(1)
+
+    #recording_id = create_recording(api_address, participant_id)
+    #print recording_id
+    #start_recording(url, recording_id)
+    #print ('\nstarted recording ...')
+
+def setup(api_address):
+    print('\ncreating project and participant at: ' + api_address)
+
+    project_id = create_project(api_address)
+    participant_id = create_participant(api_address, project_id)
+    calibration_id = create_calibration(api_address, project_id, participant_id)
+
+    print "Project: " + project_id, ", Participant: ", participant_id, ", Calibration: ", calibration_id, " "
+
+    # calibration
+    print('\nTo calibrate please hold the calibration card with about 1m distance in front of the participants eyes. \nThe participant then has to focus on the circles center point.')
+    input_var = raw_input("\nPress enter to calibrate >>")
+    print ('starting calibration ...')
+
+    start_calibration(api_address, calibration_id)
+    status = wait_for_status(api_address, '/api/calibrations/' + calibration_id + '/status', 'ca_state', ['failed', 'calibrated'], calibration_id, participant_id)
+
+    print('\nStream is ready to start. Please tell the participant to take his position, explain his task and hand him the smartphone.')
+    input_var = raw_input("Press enter to start the task >>")
+    print('\nStraming in progess ...')
+
+def exit_handler():
+    post_request('/api/recordings/' + recording_id + '/stop')
+    print 'stopped recording'
+    
 if __name__ == '__main__':
         
     # setup video and data socket
@@ -71,14 +175,13 @@ if __name__ == '__main__':
             connection_init = True
 
             try:
-                print("ESTABLISHING INITIAL CONNECTION")
                 data, address = multicast_socket.recvfrom(1024) #fe80::2c20:dcff:fe09:3a01%13
             except socket.error, e:
                 print(e)
                 multicast_socket.close()
                 sys.exit(0)
             
-            print("Received From: " + address[0] + " -> Data: " + data)
+            print("\n\nReceived From: " + address[0] + " -> Data: " + data)
             multicast_socket.close()
             
             # Create socket which will send a keep alive message for the live data stream
@@ -91,15 +194,14 @@ if __name__ == '__main__':
             
             pipeline = None
             try:
-                print('SETTING UP PIPELINE')
                 pipeline = gst.parse_launch(PIPEDEF_UDP)
             except Exception, e:
-                print("PIPELINE EXCEPTION")
                 print(e)
+                print('Please check your connect to the eyetracking device and restart the script.')
                 stop_sending_msg()
                 sys.exit(0)
 
-            print("PIPELINE CREATED")
+            print("Connection to glasses established")
             src = pipeline.get_by_name("src")
             src.set_property("sockfd", video_socket.fileno()) # bind pipeline to correct socket
             pipeline.set_state(gst.STATE_PLAYING)
@@ -109,6 +211,14 @@ if __name__ == '__main__':
             if not os.path.exists(eyetracking_directory):
                 os.makedirs(eyetracking_directory)
             eytracking_file = open(eyetracking_directory + "/eyetracking_data_raw.txt", "a+")
+
+            #api_address = 'http://' + json.loads(data)['ipv4']
+            #api_address = 'http://[fe80::76fe:48ff:fe25:2340]'
+            api_address = 'http://[' + address[0][:-3] + ']'
+            setup(api_address)
+
+            # start openCV script to receive stream
+            os.system('start cv_1marker.py')
 
         else:
             threading.Timer(0, send_keepalive_msg, [data_socket,KA_DATA_MSG,peer]).start()

@@ -19,9 +19,8 @@ quality = 2 # size of the input video. 1 == 1920*1080
 outputQuality = 2 # size of the cropped output avi file. 1 == nexus5 screen size (1080*1920), 2 == 1/2 ... 
 
 class ImageGrabber(threading.Thread):
-    def __init__(self, ID):
+    def __init__(self):
         threading.Thread.__init__(self)
-        self.ID=ID
         self.stream = cv2.VideoCapture("config.sdp")
         #self.stream = cv2.VideoCapture("./markers/test18.mp4")
 
@@ -49,8 +48,9 @@ class ImageGrabber(threading.Thread):
                 break
 
 class Main(threading.Thread):
-    def __init(self):
-        threading.Thread.__init(self)
+    def __init__(self, participant):
+        threading.Thread.__init__(self)
+        self.participant = participant
 
     def drawCircle(self,img,x,y):
         #draw screen estimates
@@ -108,7 +108,7 @@ class Main(threading.Thread):
         self.mtx = numpy.array([[1.12825274e+03, 0.00000000e+00, 9.35684715e+02], [0.00000000e+00, 1.10801151e+03, 5.86151765e+02], [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
         self.corner_refine_criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
-        directory = './out/{0}/'.format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"))
+        directory = './out/{0}-{1}/'.format(self.participant, datetime.datetime.now().strftime("%Y-%m-%d"))
         #directory = './out/2018-11-15-12-38/'
         videoFilename_processed = 'gaze_video_processed.avi'
         videoFilename_raw = 'gaze_video_raw.avi'
@@ -119,12 +119,13 @@ class Main(threading.Thread):
         out_raw = cv2.VideoWriter(directory + videoFilename_raw,fourcc, 25, (inputWidth,inputHeight))
         cv2.useOptimized()
 
+        self.counter = 0
         while not (frames.qsize() == 0 and recording_flag == False):
             if(not frames.empty()):
                 self.current_frame = frames.get()
                 self.current_timestamp = timestamps.get()
 
-                out_raw.write(self.current_frame)
+                self.raw_frame = self.current_frame
                 self.current_frame = cv2.undistort(self.current_frame, self.mtx, self.dist, None, self.cameraMatrix)
                 frame_gray = cv2.cvtColor(self.current_frame, cv2.COLOR_BGR2GRAY) # aruco.detectMarkers() requires gray image
                 markers = cv2.aruco.detectMarkers(frame_gray,dictionary)
@@ -144,8 +145,12 @@ class Main(threading.Thread):
                         self.error_frames += 1
                         print('markers detected but the main one is not amongst them.')
                         print(str(self.success_frames) + ' / ' + str(self.processed_frames) + ' -> ' + str(self.error_frames) + ' errors' + ' (' + str((float(self.error_frames) / float(self.processed_frames)) * float(100)) + '%), (' + str(frames.qsize()) + ' buffered)')
-                        #cv2.imshow('frame',self.current_frame)
-                        #cv2.waitKey(100)
+                    
+                        self.counter += 1
+                        if self.counter > 100:
+                            self.counter = 0
+                            cv2.imshow('frame',self.raw_frame)
+                            cv2.waitKey(100)
                         continue
 
                     term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, 30, 0.1)
@@ -159,7 +164,7 @@ class Main(threading.Thread):
                         [self.marker_size/2,-self.marker_size/2 - (self.screen_height + 20) - 1,0] #tofdo
                     ]).reshape(-1,3)
                     imgpts, jac = cv2.projectPoints(screenCorners, rvec, tvec, self.mtx, self.dist) #world coordinates to camera coordinates
-                    self.current_frame = cv2.aruco.drawAxis(self.current_frame, self.cameraMatrix, self.dist, rvec, tvec, 100)
+                    #self.current_frame = cv2.aruco.drawAxis(self.current_frame, self.cameraMatrix, self.dist, rvec, tvec, 100)
 
                     screen_top_left = imgpts[0][0]
                     screen_top_right = imgpts[1][0]
@@ -201,7 +206,7 @@ class Main(threading.Thread):
                             screen_bottom_right = secondary_marker_top_right
                             screen_bottom_left = self.intersection(corners_id0[0][0],corners_id0[0][3],secondary_marker_top_right,secondary_marker_top_left) 
                                     
-                        self.current_frame = cv2.aruco.drawAxis(self.current_frame, self.cameraMatrix, self.dist, rvec, tvec, 100)
+                        #self.current_frame = cv2.aruco.drawAxis(self.current_frame, self.cameraMatrix, self.dist, rvec, tvec, 100)
 
                     # self.drawCircle(self.current_frame, screen_top_left[0], screen_top_left[1])
                     # self.drawCircle(self.current_frame, screen_top_right[0], screen_top_right[1])
@@ -211,11 +216,22 @@ class Main(threading.Thread):
                     #Transform perspective according to QR code corner coordinates
                     pts1 = numpy.float32([screen_top_left, screen_top_right, screen_bottom_left, screen_bottom_right])
                     pts2 = numpy.float32([[0,0],[self.screen_pixel_width/outputQuality,0],[0,self.screen_pixel_height/outputQuality],[self.screen_pixel_width/outputQuality,self.screen_pixel_height/outputQuality]])
-
+    
+                    cornerlog = open(directory + 'corners.txt', 'a+')
+                    cornerlog.write(
+                        str(self.current_timestamp) + '; ' + 
+                        str(screen_top_left) +  '; ' + 
+                        str(screen_top_right) + '; ' + 
+                        str(screen_bottom_right) +  '; ' + 
+                        str(screen_bottom_left) + '\n'
+                    )
+                    cornerlog.close()
+                    
                     M = cv2.getPerspectiveTransform(pts1,pts2)
                     self.current_frame = cv2.warpPerspective(self.current_frame,M,(self.screen_pixel_width/outputQuality,self.screen_pixel_height/outputQuality))
                     
                     trackingupdate.put((self.current_timestamp, M))
+                    out_raw.write(self.raw_frame)
                     out_processed.write(self.current_frame)
                     frames.task_done()
                     timestamps.task_done()
@@ -232,8 +248,12 @@ class Main(threading.Thread):
                     self.error_frames +=1 
                     
                 print(str(self.success_frames) + ' / ' + str(self.processed_frames) + ' -> ' + str(self.error_frames) + ' errors' + ' (' + str((float(self.error_frames) / float(self.processed_frames)) * float(100)) + '%), (' + str(frames.qsize()) + ' buffered)')
-                #cv2.imshow('frame',self.current_frame)
-                #cv2.waitKey(100)
+                
+                self.counter += 1
+                if self.counter > 100:
+                    self.counter = 0
+                    cv2.imshow('frame', self.raw_frame)
+                    cv2.waitKey(100)
 
         out_processed.release()
         out_raw.release()
@@ -241,18 +261,21 @@ class Main(threading.Thread):
         sys.exit(0)
 
 class trackingprocessor(threading.Thread):
-    def __init(self):
-        threading.Thread.__init(self)
+    def __init__(self, participant):
+        threading.Thread.__init__(self)
+        self.participant = participant
+
     def run(self):
         global trackingupdate
         self.initial_timestamp = 0
         self.currentNewTs = 0
         self.currentNewTs_relative = 0
 
-        directory = './out/{0}'.format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"))
+        directory = './out/{0}-{1}/'.format(self.participant, datetime.datetime.now().strftime("%Y-%m-%d"))
         open(directory + '/eyetracking_data_raw.txt', 'a').close() #initialize file because this would normally be created later by eyetracking.py
         self.trackingdata = open(directory + '/eyetracking_data_raw.txt', 'r+')
         self.processeddata = open(directory + "/eyetracking_data_processed.txt", "a+")
+
         while not (trackingupdate.empty() and recording_flag == False):
             current_timestamp, gazeShiftMtx = trackingupdate.get()
 
@@ -273,10 +296,16 @@ class trackingprocessor(threading.Thread):
 
                 self.processeddata.write(json.dumps(line) + '\n')
 
-grabber = ImageGrabber(0)
-main = Main()
+try:
+    participant = sys.argv[1]
+except:
+    print 'please provide the participants identification as an argument.'
+    sys.exit(0)
+
+grabber = ImageGrabber()
+main = Main(participant)
 #main2 = Main()
-trackingprocessor = trackingprocessor()
+trackingprocessor = trackingprocessor(participant)
 
 grabber.start()
 main.start()

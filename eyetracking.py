@@ -11,7 +11,7 @@ import datetime
 import os
 import urllib2
 import json
-import atexit
+import sys
 
 pygst.require('0.10')
 import gst
@@ -27,6 +27,12 @@ running = True
 timeout = 1.0
 count = 0
 recording_id = ''
+
+if len(sys.argv) < 2:
+    print "\nexpected participant id but no argument was given."
+    sys.exit(1)
+else: 
+    participant_global_identification = sys.argv[1]
 
 KA_DATA_MSG = "{\"type\": \"live.data.unicast\", \"key\": \"ab305939-5a40-46c0-b08b-15b901adc6b1\", \"op\": \"start\"}"
 KA_VIDEO_MSG = "{\"type\": \"live.video.unicast\", \"key\": \"a178c5e8-e683-411a-9c4c-fcc630ac642e\", \"op\": \"start\"}"
@@ -98,7 +104,6 @@ def post_request(url, api_action, data=None):
     json_data = json.loads(data)
     return json_data
 
-
 def wait_for_status(url, api_action, key, values, calibration_id, participant_id):
     waiting = True
     while waiting:
@@ -157,10 +162,6 @@ def setup(api_address):
     input_var = raw_input("Press enter to start the task >>")
     print('\nStraming in progess ...')
 
-def exit_handler():
-    post_request('/api/recordings/' + recording_id + '/stop')
-    print 'stopped recording'
-    
 if __name__ == '__main__':
         
     # setup video and data socket
@@ -206,19 +207,21 @@ if __name__ == '__main__':
             src.set_property("sockfd", video_socket.fileno()) # bind pipeline to correct socket
             pipeline.set_state(gst.STATE_PLAYING)
 
-            # create directory the eyetracking data gets stored in
-            eyetracking_directory = './out/{0}'.format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"))
-            if not os.path.exists(eyetracking_directory):
-                os.makedirs(eyetracking_directory)
-            eytracking_file = open(eyetracking_directory + "/eyetracking_data_raw.txt", "a+")
+            #participant_global_identification = raw_input("Press enter the participants identification >>")
 
             #api_address = 'http://' + json.loads(data)['ipv4']
             #api_address = 'http://[fe80::76fe:48ff:fe25:2340]'
             api_address = 'http://[' + address[0][:-3] + ']'
             setup(api_address)
 
+            # create directory the eyetracking data gets stored in
+            eyetracking_directory = './out/{0}-{1}'.format(participant_global_identification, datetime.datetime.now().strftime("%Y-%m-%d"))
+            if not os.path.exists(eyetracking_directory):
+                os.makedirs(eyetracking_directory)
+            eytracking_file = open(eyetracking_directory + "/eyetracking_data_raw.txt", "a+")
+
             # start openCV script to receive stream
-            os.system('start cv_1marker.py')
+            os.system('start cv_1marker.py ' + participant_global_identification)
 
         else:
             threading.Timer(0, send_keepalive_msg, [data_socket,KA_DATA_MSG,peer]).start()

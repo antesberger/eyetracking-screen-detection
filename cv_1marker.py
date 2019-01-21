@@ -16,7 +16,7 @@ frame_width = 0
 frame_height = 0
 recording_flag = True
 quality = 2 # size of the input video. 1 == 1920*1080
-outputQuality = 2 # size of the cropped output avi file. 1 == nexus5 screen size (1080*1920), 2 == 1/2 ... 
+outputQuality = 3 # size of the cropped output avi file. 1 == nexus5 screen size (1080*1920), 2 == 1/2 ... 
 
 class ImageGrabber(threading.Thread):
     def __init__(self):
@@ -40,7 +40,7 @@ class ImageGrabber(threading.Thread):
                 if ret == True:
                     frame = cv2.resize(frame, (frame_width/quality,frame_height/quality))
                     frames.put(frame)
-                    timestamps.put(self.stream.get(cv2.CAP_PROP_POS_MSEC) * 1000000)
+                    timestamps.put((self.stream.get(cv2.CAP_PROP_POS_MSEC) * 10000000, str(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f"))))
             except:
                 recording_flag = False
                 self.stream.release()
@@ -120,10 +120,11 @@ class Main(threading.Thread):
         cv2.useOptimized()
 
         self.counter = 0
+        self.computedFrames = open(directory + "/computed_frames.txt", "a+")
         while not (frames.qsize() == 0 and recording_flag == False):
             if(not frames.empty()):
                 self.current_frame = frames.get()
-                self.current_timestamp = timestamps.get()
+                self.current_timestamp, self.current_absolute_timestamp = timestamps.get()
 
                 self.raw_frame = self.current_frame
                 self.current_frame = cv2.undistort(self.current_frame, self.mtx, self.dist, None, self.cameraMatrix)
@@ -147,7 +148,7 @@ class Main(threading.Thread):
                         print(str(self.success_frames) + ' / ' + str(self.processed_frames) + ' -> ' + str(self.error_frames) + ' errors' + ' (' + str((float(self.error_frames) / float(self.processed_frames)) * float(100)) + '%), (' + str(frames.qsize()) + ' buffered)')
                     
                         self.counter += 1
-                        if self.counter > 100:
+                        if self.counter > 200:
                             self.counter = 0
                             cv2.imshow('frame',self.raw_frame)
                             cv2.waitKey(100)
@@ -219,6 +220,7 @@ class Main(threading.Thread):
     
                     cornerlog = open(directory + 'corners.txt', 'a+')
                     cornerlog.write(
+                        datetime.datetime.now().strftime("%Y-%m-%d; %H:%M:%S:%f") + "; " +
                         str(self.current_timestamp) + '; ' + 
                         str(screen_top_left) +  '; ' + 
                         str(screen_top_right) + '; ' + 
@@ -228,9 +230,16 @@ class Main(threading.Thread):
                     cornerlog.close()
                     
                     M = cv2.getPerspectiveTransform(pts1,pts2)
-                    self.current_frame = cv2.warpPerspective(self.current_frame,M,(self.screen_pixel_width/outputQuality,self.screen_pixel_height/outputQuality))
+                    self.current_frame = cv2.warpPerspective(
+                        self.current_frame,
+                        M,
+                        (self.screen_pixel_width/outputQuality,
+                        self.screen_pixel_height/outputQuality)
+                    )
                     
-                    trackingupdate.put((self.current_timestamp, M))
+                    trackingupdate.put((self.current_timestamp, self.current_absolute_timestamp, M))
+                    self.computedFrames.write(str(self.current_timestamp) + "; " + self.current_absolute_timestamp + "; " + str(M)  + "\n")
+
                     out_raw.write(self.raw_frame)
                     out_processed.write(self.current_frame)
                     frames.task_done()
@@ -241,7 +250,7 @@ class Main(threading.Thread):
                 else:
                     #log frames without detected marker
                     errorlog = open(directory + 'log.txt', 'a+')
-                    errorlog.write('no markers detected at ts: ' + str(self.current_timestamp) + '\n')
+                    errorlog.write('no markers detected at ts: ' + str(self.current_timestamp) + " (" + self.current_absolute_timestamp + ")" '\n')
                     errorlog.close()
 
                     #command line feedback for success rate
@@ -250,7 +259,7 @@ class Main(threading.Thread):
                 print(str(self.success_frames) + ' / ' + str(self.processed_frames) + ' -> ' + str(self.error_frames) + ' errors' + ' (' + str((float(self.error_frames) / float(self.processed_frames)) * float(100)) + '%), (' + str(frames.qsize()) + ' buffered)')
                 
                 self.counter += 1
-                if self.counter > 100:
+                if self.counter > 200:
                     self.counter = 0
                     cv2.imshow('frame', self.raw_frame)
                     cv2.waitKey(100)
@@ -268,34 +277,64 @@ class trackingprocessor(threading.Thread):
     def run(self):
         global trackingupdate
         self.initial_timestamp = 0
-        self.currentNewTs = 0
-        self.currentNewTs_relative = 0
+        self.mtx_timestamp = 0
+        self.mtx_absolute_timestamp = 0
 
         directory = './out/{0}-{1}/'.format(self.participant, datetime.datetime.now().strftime("%Y-%m-%d"))
-        open(directory + '/eyetracking_data_raw.txt', 'a').close() #initialize file because this would normally be created later by eyetracking.py
-        self.trackingdata = open(directory + '/eyetracking_data_raw.txt', 'r+')
         self.processeddata = open(directory + "/eyetracking_data_processed.txt", "a+")
+        self.trackingdata = open(directory + '/eyetracking_data_raw.txt', 'r')
+        self.mtx_timestamp, self.mtx_absolute_timestamp, self.gazeShiftMtx = trackingupdate.get()
 
-        while not (trackingupdate.empty() and recording_flag == False):
-            current_timestamp, gazeShiftMtx = trackingupdate.get()
-
-            while self.initial_timestamp == 0 or line['ts'] <= current_timestamp:
+        while True:
+            try:
                 line = self.trackingdata.readline()
-                line = json.loads(line)
-
+                line = json.loads(line, strict=False)
+                
                 if self.initial_timestamp == 0:
-                    self.initial_timestamp = line['ts']
+                    line = self.trackingdata.readline()
+                    line = json.loads(line, strict=False)
 
-                line['ts'] = line['ts'] - self.initial_timestamp
-                #print(str(line['ts']) + ' < ' + str(current_timestamp))
+                    rhour = int(line['ats'][11:13])
+                    rmin = int(line['ats'][14:16])
+                    rsec = int(line['ats'][17:19])
+                    rmsec = int(line['ats'][20:-3])
+                    rtotal = rmsec + (rsec * 1000) + (rmin * 1000 * 60) + (rhour * 60 * 60 * 1000)
 
-                if 'gp' in line:
-                    gp = numpy.array([[line['gp']]], dtype = "float32")
-                    new_gp = cv2.perspectiveTransform(gp, gazeShiftMtx)
-                    line['ts'] = self.currentNewTs_relative
+                    phour = int(self.mtx_absolute_timestamp[11:13])
+                    pmin = int(self.mtx_absolute_timestamp[14:16])
+                    psec = int(self.mtx_absolute_timestamp[17:19])
+                    pmsec = int(self.mtx_absolute_timestamp[20:-3])
+                    ptotal = pmsec + (psec * 1000) + (pmin * 1000 * 60) + (phour * 60 * 60 * 1000)
 
-                self.processeddata.write(json.dumps(line) + '\n')
+                    if rtotal >= ptotal:
+                        self.initial_timestamp = line['ts']
 
+                    print "syncing"
+            
+                else:
+                    line['tts'] = line['ts']
+                    line['ts'] = line['ts'] - self.initial_timestamp
+
+                    if 'gp' in line:
+                        while line['ts'] > self.mtx_timestamp:
+                            self.mtx_timestamp, self.mtx_absolute_timestamp, self.gazeShiftMtx = trackingupdate.get()
+                        
+                        rawX = line['gp'][0]
+                        rawY = line['gp'][1]
+
+                        rawXpx = rawX * 960
+                        rawYpx = rawY * 540
+
+                        gp = numpy.array([[[rawXpx, rawYpx]]], dtype = "float32")
+                        new_gp = cv2.perspectiveTransform(gp, self.gazeShiftMtx)
+                        line['gp'][0] = int(new_gp[0][0][0])
+                        line['gp'][1] = int(new_gp[0][0][1])
+
+                        self.processeddata.write(json.dumps(line) + '\n')
+            except:
+                pass
+
+                        
 try:
     participant = sys.argv[1]
 except:
@@ -304,15 +343,12 @@ except:
 
 grabber = ImageGrabber()
 main = Main(participant)
-#main2 = Main()
 trackingprocessor = trackingprocessor(participant)
 
 grabber.start()
 main.start()
-#main2.start()
 trackingprocessor.start()
 
 grabber.join()
 main.join()
-#main2.join()
 trackingprocessor.join()

@@ -16,7 +16,7 @@ frame_width = 0
 frame_height = 0
 recording_flag = True
 quality = 2 # size of the input video. 1 == 1920*1080
-outputQuality = 3 # size of the cropped output avi file. 1 == nexus5 screen size (1080*1920), 2 == 1/2 ... 
+outputQuality = 2 # size of the cropped output avi file. 1 == nexus5 screen size (1080*1920), 2 == 1/2 ... 
 
 class ImageGrabber(threading.Thread):
     def __init__(self):
@@ -84,6 +84,8 @@ class Main(threading.Thread):
         return (num / denom.astype(float))*db + b1
 
     def run(self):
+
+        # variables for syncing between threads
         global frames
         global timestamps
         global frame_width
@@ -96,6 +98,7 @@ class Main(threading.Thread):
         self.success_frames = 0
         self.error_frames = 0
 
+        # phone and screen constants
         self.marker_size = 66 #rectangular (mm)
         self.secondary_marker_size = 20
         self.screen_height = 130 #mm
@@ -103,6 +106,7 @@ class Main(threading.Thread):
         self.screen_pixel_height = 2880
         self.screen_pixel_width = 1440
         
+        # precomputed calibration constants for the eyetracker
         self.dist = numpy.array([[0.05357947, -0.22872005, -0.00118557, -0.00126952, 0.2067489 ]])
         self.cameraMatrix = numpy.array([[1.12585498e+03, 0.00000000e+00, 9.34478069e+02], [0.00000000e+00, 1.10135217e+03, 5.84380561e+02], [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
         self.mtx = numpy.array([[1.12825274e+03, 0.00000000e+00, 9.35684715e+02], [0.00000000e+00, 1.10801151e+03, 5.86151765e+02], [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
@@ -119,11 +123,16 @@ class Main(threading.Thread):
         out_raw = cv2.VideoWriter(directory + videoFilename_raw,fourcc, 25, (inputWidth,inputHeight))
         cv2.useOptimized()
 
-        self.counter = 0
-        self.computedFrames = open(directory + "/computed_frames.txt", "a+")
+        # open log files
+        computedFrames = open(directory + "/computed_frames.txt", "a+")
+        log = open(directory + 'log.txt', 'a+')
+
+        self.counter = 0 # used to execute functions only for every xth frame
         while not (frames.qsize() == 0 and recording_flag == False):
             if(not frames.empty()):
                 self.current_frame = frames.get()
+
+                # tobii format,         yyyy-mm-dd-hh-mm-ss-ffffff
                 self.current_timestamp, self.current_absolute_timestamp = timestamps.get()
 
                 self.raw_frame = self.current_frame
@@ -144,9 +153,11 @@ class Main(threading.Thread):
                     except:
                         # No marker with id == 0 detected
                         self.error_frames += 1
-                        print('markers detected but the main one is not amongst them.')
-                        print(str(self.success_frames) + ' / ' + str(self.processed_frames) + ' -> ' + str(self.error_frames) + ' errors' + ' (' + str((float(self.error_frames) / float(self.processed_frames)) * float(100)) + '%), (' + str(frames.qsize()) + ' buffered)')
-                    
+                        # print('markers detected but the main one is not amongst them.')
+                        logstr = str(self.current_absolute_timestamp) + "; " + str(self.success_frames) + ' / ' + str(self.processed_frames) + '; ' + str(self.error_frames) + ' errors' + '; ' + str((float(self.error_frames) / float(self.processed_frames)) * float(100)) + '%; (' + str(frames.qsize()) + ' buffered'
+                        log.write(logstr)
+                        print(logstr)
+
                         self.counter += 1
                         if self.counter > 200:
                             self.counter = 0
@@ -158,11 +169,12 @@ class Main(threading.Thread):
                     corners_id0 = cv2.cornerSubPix(frame_gray, corners[id0], (5, 5), (-1, -1), term)
                     rvec, tvec, objPoints = cv2.aruco.estimatePoseSingleMarkers(corners_id0, self.marker_size, self.cameraMatrix, self.dist) #tvec is the translation vector of the markers center
 
+                    # corner estimation based on single big marker on the top of the screen
                     screenCorners = numpy.float32([
                         [-self.marker_size/2, -self.marker_size/2 - 1, 0],
                         [self.marker_size/2, -self.marker_size/2 - 1, 0],
-                        [-self.marker_size/2,-self.marker_size/2 - (self.screen_height + 20) - 1,0], #todo
-                        [self.marker_size/2,-self.marker_size/2 - (self.screen_height + 20) - 1,0] #tofdo
+                        [-self.marker_size/2,-self.marker_size/2 - (self.screen_height + 15) - 1,0],
+                        [self.marker_size/2,-self.marker_size/2 - (self.screen_height + 15) - 1,0]
                     ]).reshape(-1,3)
                     imgpts, jac = cv2.projectPoints(screenCorners, rvec, tvec, self.mtx, self.dist) #world coordinates to camera coordinates
                     #self.current_frame = cv2.aruco.drawAxis(self.current_frame, self.cameraMatrix, self.dist, rvec, tvec, 100)
@@ -175,18 +187,24 @@ class Main(threading.Thread):
                     id1 = None
                     id3 = None
                     
+                    # check if secondary markers were detected
                     try:
                         id1 = ids.tolist().index([1])
                         secondary_id = id1
                     except:
+                        logstr = str(self.current_absolute_timestamp) + "; marker 1 not detected"
+                        log.write(logstr)
                         pass
 
                     try:
                         id3 = ids.tolist().index([3])
                         secondary_id = id3
                     except:
+                        logstr = str(self.current_absolute_timestamp) + "; marker 3 not detected"
+                        log.write(logstr)
                         pass
                     
+                    # if one of them is detected: compute vector intersection
                     if id1 or id3 is not None:
                         corners_secondary = cv2.cornerSubPix(frame_gray, corners[secondary_id], (5, 5), (-1, -1), term)
                         rvec, tvec, objPoints = cv2.aruco.estimatePoseSingleMarkers(corners_secondary, self.secondary_marker_size, self.cameraMatrix, self.dist)
@@ -200,6 +218,7 @@ class Main(threading.Thread):
                         secondary_marker_top_left = imgpts[0][0]
                         secondary_marker_top_right = imgpts[1][0]
 
+    	                # use coordinates themselves if all markers were detected
                         if id3 is not None:
                             screen_bottom_left = secondary_marker_top_left
                             screen_bottom_right = self.intersection(corners_id0[0][1],corners_id0[0][2],secondary_marker_top_left,secondary_marker_top_right) 
@@ -217,17 +236,6 @@ class Main(threading.Thread):
                     #Transform perspective according to QR code corner coordinates
                     pts1 = numpy.float32([screen_top_left, screen_top_right, screen_bottom_left, screen_bottom_right])
                     pts2 = numpy.float32([[0,0],[self.screen_pixel_width/outputQuality,0],[0,self.screen_pixel_height/outputQuality],[self.screen_pixel_width/outputQuality,self.screen_pixel_height/outputQuality]])
-    
-                    cornerlog = open(directory + 'corners.txt', 'a+')
-                    cornerlog.write(
-                        datetime.datetime.now().strftime("%Y-%m-%d; %H:%M:%S:%f") + "; " +
-                        str(self.current_timestamp) + '; ' + 
-                        str(screen_top_left) +  '; ' + 
-                        str(screen_top_right) + '; ' + 
-                        str(screen_bottom_right) +  '; ' + 
-                        str(screen_bottom_left) + '\n'
-                    )
-                    cornerlog.close()
                     
                     M = cv2.getPerspectiveTransform(pts1,pts2)
                     self.current_frame = cv2.warpPerspective(
@@ -238,31 +246,45 @@ class Main(threading.Thread):
                     )
                     
                     trackingupdate.put((self.current_timestamp, self.current_absolute_timestamp, M))
-                    self.computedFrames.write(str(self.current_timestamp) + "; " + self.current_absolute_timestamp + "; " + str(M)  + "\n")
 
-                    out_raw.write(self.raw_frame)
+                    computedFrames.write(
+                        str(self.current_timestamp) + "; " + 
+                        self.current_absolute_timestamp + "; " + 
+                        str(screen_top_left) +  '; ' + 
+                        str(screen_top_right) + '; ' + 
+                        str(screen_bottom_right) +  '; ' + 
+                        str(screen_bottom_left) + '; ' +
+                        str(M) + "\n"
+                    )
+
                     out_processed.write(self.current_frame)
+
                     frames.task_done()
                     timestamps.task_done()
+                    trackingupdate.task_done()
 
                     self.success_frames += 1
 
                 else:
                     #log frames without detected marker
-                    errorlog = open(directory + 'log.txt', 'a+')
-                    errorlog.write('no markers detected at ts: ' + str(self.current_timestamp) + " (" + self.current_absolute_timestamp + ")" '\n')
-                    errorlog.close()
+                    log.write(str(self.current_absolute_timestamp) + "; no markers detected; " + str(self.current_timestamp) + '\n')
 
                     #command line feedback for success rate
                     self.error_frames +=1 
-                    
-                print(str(self.success_frames) + ' / ' + str(self.processed_frames) + ' -> ' + str(self.error_frames) + ' errors' + ' (' + str((float(self.error_frames) / float(self.processed_frames)) * float(100)) + '%), (' + str(frames.qsize()) + ' buffered)')
                 
+                out_raw.write(self.raw_frame)
+                logstr = str(self.current_absolute_timestamp) + "; " + str(self.success_frames) + ' / ' + str(self.processed_frames) + '; ' + str(self.error_frames) + ' errors' + '; ' + str((float(self.error_frames) / float(self.processed_frames)) * float(100)) + '%; (' + str(frames.qsize()) + ' buffered'
+                print(logstr)
+                log.write(logstr)
+                                
                 self.counter += 1
                 if self.counter > 200:
                     self.counter = 0
                     cv2.imshow('frame', self.raw_frame)
                     cv2.waitKey(100)
+
+        computedFrames.close()
+        log.close()
 
         out_processed.release()
         out_raw.release()
@@ -281,15 +303,17 @@ class trackingprocessor(threading.Thread):
         self.mtx_absolute_timestamp = 0
 
         directory = './out/{0}-{1}/'.format(self.participant, datetime.datetime.now().strftime("%Y-%m-%d"))
-        self.processeddata = open(directory + "/eyetracking_data_processed.txt", "a+")
         self.trackingdata = open(directory + '/eyetracking_data_raw.txt', 'r')
         self.mtx_timestamp, self.mtx_absolute_timestamp, self.gazeShiftMtx = trackingupdate.get()
+
+        processeddata = open(directory + "/eyetracking_data_processed.txt", "a+")
 
         while True:
             try:
                 line = self.trackingdata.readline()
                 line = json.loads(line, strict=False)
                 
+                # skip the first data points which were recorded before the processing started
                 if self.initial_timestamp == 0:
                     line = self.trackingdata.readline()
                     line = json.loads(line, strict=False)
@@ -309,7 +333,7 @@ class trackingprocessor(threading.Thread):
                     if rtotal >= ptotal:
                         self.initial_timestamp = line['ts']
 
-                    print "syncing"
+                    #print "syncing"
             
                 else:
                     line['tts'] = line['ts']
@@ -330,11 +354,10 @@ class trackingprocessor(threading.Thread):
                         line['gp'][0] = int(new_gp[0][0][0])
                         line['gp'][1] = int(new_gp[0][0][1])
 
-                        self.processeddata.write(json.dumps(line) + '\n')
+                        processeddata.write(json.dumps(line) + '\n')
             except:
                 pass
-
-                        
+              
 try:
     participant = sys.argv[1]
 except:
@@ -343,12 +366,12 @@ except:
 
 grabber = ImageGrabber()
 main = Main(participant)
-trackingprocessor = trackingprocessor(participant)
+# trackingprocessor = trackingprocessor(participant)
 
 grabber.start()
 main.start()
-trackingprocessor.start()
+# trackingprocessor.start()
 
 grabber.join()
 main.join()
-trackingprocessor.join()
+# trackingprocessor.join()

@@ -212,7 +212,7 @@ if __name__ == '__main__':
             #api_address = 'http://' + json.loads(data)['ipv4']
             #api_address = 'http://[fe80::76fe:48ff:fe25:2340]'
             api_address = 'http://[' + address[0][:-3] + ']'
-            #setup(api_address)
+            setup(api_address)
 
             # create directory the eyetracking data gets stored in
             eyetracking_directory = './out/{0}-{1}'.format(participant_global_identification, datetime.datetime.now().strftime("%Y-%m-%d"))
@@ -236,7 +236,6 @@ if __name__ == '__main__':
                 sys.exit(0)
             
             # write eyetracking data to file
-            # {"ts":3023634072,"s":0,"ac":[1.334,-10.048,-1.294]}
             data = data[:-2] + ',"ats":"' + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f") + '"}\n'
             eytracking_file.write(data)
 

@@ -128,6 +128,7 @@ class Main(threading.Thread):
         log = open(directory + 'log.txt', 'a+')
 
         self.counter = 0 # used to execute functions only for every xth frame
+        self.logcounter = 0
         while not (frames.qsize() == 0 and recording_flag == False):
             if(not frames.empty()):
                 self.current_frame = frames.get()
@@ -155,7 +156,10 @@ class Main(threading.Thread):
                         self.error_frames += 1
                         # print('markers detected but the main one is not amongst them.')
                         logstr = str(self.current_absolute_timestamp) + "; " + str(self.success_frames) + ' / ' + str(self.processed_frames) + '; ' + str(self.error_frames) + ' errors' + '; ' + str((float(self.error_frames) / float(self.processed_frames)) * float(100)) + '%; (' + str(frames.qsize()) + ' buffered'
-                        log.write(logstr)
+                        self.logcounter += 1
+                        if self.logcounter > 20:
+                            log.write(logstr)
+                            self.logcounter = 0
                         print(logstr)
 
                         self.counter += 1
@@ -275,7 +279,11 @@ class Main(threading.Thread):
                 out_raw.write(self.raw_frame)
                 logstr = str(self.current_absolute_timestamp) + "; " + str(self.success_frames) + ' / ' + str(self.processed_frames) + '; ' + str(self.error_frames) + ' errors' + '; ' + str((float(self.error_frames) / float(self.processed_frames)) * float(100)) + '%; (' + str(frames.qsize()) + ' buffered'
                 print(logstr)
-                log.write(logstr)
+
+                self.logcounter += 1
+                if self.logcounter > 20:
+                    log.write(logstr)
+                    self.logcounter = 0
                                 
                 self.counter += 1
                 if self.counter > 200:

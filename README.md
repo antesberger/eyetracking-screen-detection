@@ -18,6 +18,8 @@ The /scripts directory contains two start scripts one for windows and one for th
 
 ### Postprocessing
 In this directory you will find some script to merge, clean and process the obtained data.
+* gazePointVideo.py: Draw the gazePoint into a processed video. See above for an example.
+* galleryMapper: To be used with the gallery app (https://github.com/antesberger/eyetracking-gallery-task). Attaches the filename corresponding the the gaze points target image to an output csv file
 
 ## Install dependencies
 * python version 2.7

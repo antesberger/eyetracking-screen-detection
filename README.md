@@ -2,10 +2,10 @@
 This is a tool to map eye tracking data optained with the Tobii Pro Glasses 2 to a mobile screen. The screen is recognised by four markers each fixed to one of the screen's corners. Output is a video just containing the phone's screen and coordinates relative to it.
 
 ### Examples
-study setup: https://youtu.be/G8e6BhmDbmE
-source video recorded with the Tobii Eyetracker: https://youtu.be/Faa2i5FKkCA
-application in android app: https://youtu.be/LDF4DCDZavQ
-visualizing accuracy: https://youtu.be/pgOZUwNd2pg
+* study setup: https://youtu.be/G8e6BhmDbmE
+* source video recorded with the Tobii Eyetracker: https://youtu.be/Faa2i5FKkCA
+* application in android app: https://youtu.be/LDF4DCDZavQ
+* visualizing accuracy: https://youtu.be/pgOZUwNd2pg
 
 ### Aruco Marker Positioning
 The markers to be used are located in the /markers directory. Currently the tracking file is configured to look for the markers with id=0, id=1 and id=3.

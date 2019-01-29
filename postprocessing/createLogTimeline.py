@@ -77,7 +77,7 @@ with open('./out/' + data + '/log.csv', mode='w') as timeline:
 
 plt.plot(tsList,errorcountList)
 plt.gcf().autofmt_xdate()
-plt.xlabel('errors')
-plt.ylabel('time')
+plt.ylabel('errors')
+plt.xlabel('time')
 plt.savefig('./out/' + data + '/logTimeline.pdf')
 #plt.show()

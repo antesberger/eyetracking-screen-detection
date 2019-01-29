@@ -7,3 +7,5 @@ calibresult.png
 pattern.png
 *.avi
 info
+/postprocessing/data/eyetracking/*
+/postprocessing/data/phone/*

@@ -1,0 +1,5 @@
+#!/bin/bash
+file="$1"
+
+python gazePointVideo.py $file
+python createLogTimeline.py $file

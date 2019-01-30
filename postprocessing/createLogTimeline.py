@@ -75,9 +75,34 @@ with open('./out/' + data + '/log.csv', mode='w') as timeline:
 
         errorcountList.append(errorcount)
 
+#begin drawing plot
 plt.plot(tsList,errorcountList)
 plt.gcf().autofmt_xdate()
 plt.ylabel('errors')
 plt.xlabel('time')
+
+task = ''
+if data[:3].lower() == 'acc':
+    task = 'accuracy'
+elif data[:3].lower() == 'cha':
+    task = 'chat'
+elif data[:3].lower() == 'gal':
+    task = 'gallery'
+elif data[:3].lower() == 'map':
+    task = 'map'
+
+if task != '':
+    phoneLog = open('./data/phone/' + task + '/' + data + '/log.txt', 'r')
+    phoneLogLine = phoneLog.readline()[:-1]
+    phoneLogTs = datetime.strptime(phoneLogLine.split(": ")[0], "%Y-%m-%d %H:%M:%S,%f")
+
+    while phoneLogLine != '':
+        print phoneLogLine
+        phoneLogLine = phoneLog.readline()[:-1]
+        if phoneLogLine != '':
+            phoneLogTs = datetime.strptime(phoneLogLine.split("; ")[0], "%Y-%m-%d %H:%M:%S.%f")
+            plt.axvline(x=phoneLogTs, color='black', linestyle='--')
+            plt.text(phoneLogTs, errorcount, phoneLogLine.split("; ")[1], rotation=90)
+
 plt.savefig('./out/' + data + '/logTimeline.pdf')
 #plt.show()

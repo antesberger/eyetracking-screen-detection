@@ -81,7 +81,7 @@ while cap.isOpened():
 
             #break condition
             if not ret:
-                break;
+                break
 
             frameLine = (computedFrames.readline() + computedFrames.readline() + computedFrames.readline()).split(';')
             frameTs = datetime.strptime(frameLine[1], " %Y-%m-%d-%H-%M-%S-%f")
@@ -103,7 +103,7 @@ while cap.isOpened():
 
         with open('./out/' + data + '/eyetracking.csv', mode='a') as eyetracking:
             eyetracking_writer = csv.writer(eyetracking, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            eyetracking_writer.writerow([dataTs,transformedGp[0],transformedGp[1]])
+            eyetracking_writer.writerow([dataTs,transformedGp[0] * 2,transformedGp[1] * 2])
 
         # Display the resulting frame
         out.write(frame)

@@ -37,6 +37,9 @@ for index in randomOrderIndices:
     imagesHeight[i] = tmp
 
     i = i - 1
+with open('./out/' + data + '/imageMapping.csv', mode='a') as csvoutput:
+    csv_writer = csv.writer(csvoutput, lineterminator='\n')
+    csv_writer.writerow(['Timestamp', 'x', 'y', 'image', 'first image end', 'second image end', 'third image end'])
 
 with open('./out/' + data + '/eyetracking.csv', mode='r') as csvinput:
     csv_reader = csv.reader(csvinput, delimiter=',')
@@ -86,7 +89,7 @@ with open('./out/' + data + '/eyetracking.csv', mode='r') as csvinput:
             i = 0
 
             while i < lastVisibleImage:
-                offset += int(imagesHeight[i])
+                offset += int(x[i])
                 i += 1
 
             try:
@@ -96,30 +99,28 @@ with open('./out/' + data + '/eyetracking.csv', mode='r') as csvinput:
             except:
                 pass
 
+            #print str(firstImage) + ", " + str(secondImage) + ", " + str(thirdImage)
+            image = ''
             if gazeX > 0 and gazeX < 1440:
                 if gazeY > 0 and gazeY <= firstImage:
-                    row.append(images[i])
-                    all.append(row)
-                    print(str(gazeTs) + ": " + images[i])
+                    image = images[i]
+                    print(str(gazeTs) + ": " + images[i] + "; " + str(gazeY) + "; " + str(firstImage))
                 elif gazeY <= secondImage:
-                    row.append(images[i+1])
-                    all.append(row)
-                    print(str(gazeTs) + ": " + images[i+1])
-                elif gazeY < 2888 and gazeY <= thirdImage:
-                    row.append(images[i+2])
-                    all.append(row)
-                    print(str(gazeTs) + ": " + images[i+2])
+                    image = images[i + 1]
+                    print(str(gazeTs) + ": " + images[i+1] + "; " + str(gazeY) + "; " + str(secondImage))
+                elif gazeY < (2880 - 170) and gazeY <= thirdImage: # 170 because of black bar at the bootom
+                    image = images[i + 2]
+                    print(str(gazeTs) + ": " + images[i+2] + "; " + str(gazeY) + "; " + str(thirdImage))
                 else:
-                    row.append('none')
-                    all.append(row)
+                    image = 'none'
                     print(str(gazeTs) + ": " + 'none')
             else:
-                row.append('none')
-                all.append(row)
+                image = 'none'
                 print(str(gazeTs) + ": " + 'none')
+
+            with open('./out/' + data + '/imageMapping.csv', mode='a') as csvoutput:
+                csv_writer = csv.writer(csvoutput, lineterminator='\n')
+                csv_writer.writerow([gazeTs, gazeX, gazeY, image, str(firstImage), str(secondImage), str(thirdImage)])
+
         else:
             print "problems reading"
-
-    with open('./out/' + data + '/eyetrackinggall.csv', mode='a') as csvoutput:
-        csv_writer = csv.writer(csvoutput, lineterminator='\n')
-        csv_writer.writerows(all)

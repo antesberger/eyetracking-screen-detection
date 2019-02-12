@@ -31,14 +31,14 @@ recording_id = ''
 if len(sys.argv) < 2:
     print "\nexpected participant id but no argument was given."
     sys.exit(1)
-else: 
+else:
     participant_global_identification = sys.argv[1]
 
 KA_DATA_MSG = "{\"type\": \"live.data.unicast\", \"key\": \"ab305939-5a40-46c0-b08b-15b901adc6b1\", \"op\": \"start\"}"
 KA_VIDEO_MSG = "{\"type\": \"live.video.unicast\", \"key\": \"a178c5e8-e683-411a-9c4c-fcc630ac642e\", \"op\": \"start\"}"
 
 #demux -> media stream to mpeg transpor stream
-#h264parse -> parse h264 stream 
+#h264parse -> parse h264 stream
 #rtph264 -> payload-encode h264 video into rtp packets
 #udpsink -> rtp is sent over udp
 PIPEDEF_UDP =   "udpsrc name=src !" \
@@ -117,7 +117,7 @@ def wait_for_status(url, api_action, key, values, calibration_id, participant_id
             waiting = False
             print '\ncalibration successfull'
             time.sleep(0.5)
-        
+
         elif json_data['ca_state'] == 'failed':
             yes = {'yes','y', 'ye', ''}
             no = {'no','n'}
@@ -131,9 +131,9 @@ def wait_for_status(url, api_action, key, values, calibration_id, participant_id
             elif choice in no:
                 waiting = False
                 print '\nusing default calibration'
-            else: 
+            else:
                 choice = raw_input("type 'yes' to retry or 'no' to use the default calibration >>\n").lower()
-                
+
         time.sleep(1)
 
     #recording_id = create_recording(api_address, participant_id)
@@ -163,7 +163,7 @@ def setup(api_address):
     print('\nStraming in progess ...')
 
 if __name__ == '__main__':
-        
+
     # setup video and data socket
     multicast_socket = mksock( (multicast_address, bind_port))
     multicast_socket.bind(('::', bind_port))
@@ -181,18 +181,18 @@ if __name__ == '__main__':
                 print(e)
                 multicast_socket.close()
                 sys.exit(0)
-            
+
             print("\n\nReceived From: " + address[0] + " -> Data: " + data)
             multicast_socket.close()
-            
+
             # Create socket which will send a keep alive message for the live data stream
             peer = (address[0], data_port)
             data_socket = mksock(peer)
             video_socket = mksock(peer)
-            
+
             threading.Timer(0, send_keepalive_msg, [data_socket,KA_DATA_MSG,peer]).start()
             threading.Timer(0, send_keepalive_msg, [video_socket,KA_VIDEO_MSG,peer]).start()
-            
+
             pipeline = None
             try:
                 pipeline = gst.parse_launch(PIPEDEF_UDP)
@@ -221,7 +221,7 @@ if __name__ == '__main__':
             eytracking_file = open(eyetracking_directory + "/eyetracking_data_raw.txt", "a+")
 
             # start openCV script to receive stream
-            os.system('start cv_1marker.py ' + participant_global_identification)
+            os.system('start processing.py ' + participant_global_identification)
 
         else:
             threading.Timer(0, send_keepalive_msg, [data_socket,KA_DATA_MSG,peer]).start()
@@ -234,7 +234,7 @@ if __name__ == '__main__':
                 print(e)
                 data_socket.close()
                 sys.exit(0)
-            
+
             # write eyetracking data to file
             data = data[:-2] + ',"ats":"' + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f") + '"}\n'
             eytracking_file.write(data)
@@ -244,6 +244,6 @@ if __name__ == '__main__':
         if gst.STATE_CHANGE_FAILURE == state_change_return:
            print("STATE CHANGE")
            stop_sending_msg()
-           
+
     else:
         print("RUNNING IS SET TO FALSE")

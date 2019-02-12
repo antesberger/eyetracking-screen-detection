@@ -16,7 +16,7 @@ frame_width = 0
 frame_height = 0
 recording_flag = True
 quality = 2 # size of the input video. 1 == 1920*1080
-outputQuality = 2 # size of the cropped output avi file. 1 == nexus5 screen size (1080*1920), 2 == 1/2 ... 
+outputQuality = 2 # size of the cropped output avi file. 1 == nexus5 screen size (1080*1920), 2 == 1/2 ...
 
 class ImageGrabber(threading.Thread):
     def __init__(self):
@@ -28,9 +28,9 @@ class ImageGrabber(threading.Thread):
         global frames
         global frame_width
         global frame_height
-        global recording_flag 
+        global recording_flag
         global quality
-        
+
         frame_width = int(self.stream.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(self.stream.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
@@ -58,9 +58,9 @@ class Main(threading.Thread):
             img,
             (x,y), #center
             5, #radius
-            (255,0,0), 
-            thickness=1, 
-            lineType=8, 
+            (255,0,0),
+            thickness=1,
+            lineType=8,
             shift=0
         )
 
@@ -105,7 +105,7 @@ class Main(threading.Thread):
         self.screen_width = 66 #mm
         self.screen_pixel_height = 2880
         self.screen_pixel_width = 1440
-        
+
         # precomputed calibration constants for the eyetracker
         self.dist = numpy.array([[0.05357947, -0.22872005, -0.00118557, -0.00126952, 0.2067489 ]])
         self.cameraMatrix = numpy.array([[1.12585498e+03, 0.00000000e+00, 9.34478069e+02], [0.00000000e+00, 1.10135217e+03, 5.84380561e+02], [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
@@ -190,7 +190,7 @@ class Main(threading.Thread):
 
                     id1 = None
                     id3 = None
-                    
+
                     # check if secondary markers were detected
                     try:
                         id1 = ids.tolist().index([1])
@@ -207,7 +207,7 @@ class Main(threading.Thread):
                         logstr = str(self.current_absolute_timestamp) + "; marker 3 not detected"
                         log.write(logstr)
                         pass
-                    
+
                     # if one of them is detected: compute vector intersection
                     if id1 or id3 is not None:
                         corners_secondary = cv2.cornerSubPix(frame_gray, corners[secondary_id], (5, 5), (-1, -1), term)
@@ -216,7 +216,7 @@ class Main(threading.Thread):
                         screenCorners = numpy.float32([ # bottom markers are upsidedown
                             [self.secondary_marker_size/2, -self.secondary_marker_size/2 - 1, 0],
                             [-self.secondary_marker_size/2, -self.secondary_marker_size/2 - 1, 0]
-                        ]).reshape(-1,3) 
+                        ]).reshape(-1,3)
                         imgpts, jac = cv2.projectPoints(screenCorners, rvec, tvec, self.mtx, self.dist) #world coordinates to camera coordinates
 
                         secondary_marker_top_left = imgpts[0][0]
@@ -225,11 +225,11 @@ class Main(threading.Thread):
     	                # use coordinates themselves if all markers were detected
                         if id3 is not None:
                             screen_bottom_left = secondary_marker_top_left
-                            screen_bottom_right = self.intersection(corners_id0[0][1],corners_id0[0][2],secondary_marker_top_left,secondary_marker_top_right) 
+                            screen_bottom_right = self.intersection(corners_id0[0][1],corners_id0[0][2],secondary_marker_top_left,secondary_marker_top_right)
                         else:
                             screen_bottom_right = secondary_marker_top_right
-                            screen_bottom_left = self.intersection(corners_id0[0][0],corners_id0[0][3],secondary_marker_top_right,secondary_marker_top_left) 
-                                    
+                            screen_bottom_left = self.intersection(corners_id0[0][0],corners_id0[0][3],secondary_marker_top_right,secondary_marker_top_left)
+
                         #self.current_frame = cv2.aruco.drawAxis(self.current_frame, self.cameraMatrix, self.dist, rvec, tvec, 100)
 
                     # self.drawCircle(self.current_frame, screen_top_left[0], screen_top_left[1])
@@ -240,7 +240,7 @@ class Main(threading.Thread):
                     #Transform perspective according to QR code corner coordinates
                     pts1 = numpy.float32([screen_top_left, screen_top_right, screen_bottom_left, screen_bottom_right])
                     pts2 = numpy.float32([[0,0],[self.screen_pixel_width/outputQuality,0],[0,self.screen_pixel_height/outputQuality],[self.screen_pixel_width/outputQuality,self.screen_pixel_height/outputQuality]])
-                    
+
                     M = cv2.getPerspectiveTransform(pts1,pts2)
                     self.current_frame = cv2.warpPerspective(
                         self.current_frame,
@@ -248,15 +248,15 @@ class Main(threading.Thread):
                         (self.screen_pixel_width/outputQuality,
                         self.screen_pixel_height/outputQuality)
                     )
-                    
+
                     trackingupdate.put((self.current_timestamp, self.current_absolute_timestamp, M))
 
                     computedFrames.write(
-                        str(self.current_timestamp) + "; " + 
-                        self.current_absolute_timestamp + "; " + 
-                        str(screen_top_left) +  '; ' + 
-                        str(screen_top_right) + '; ' + 
-                        str(screen_bottom_right) +  '; ' + 
+                        str(self.current_timestamp) + "; " +
+                        self.current_absolute_timestamp + "; " +
+                        str(screen_top_left) +  '; ' +
+                        str(screen_top_right) + '; ' +
+                        str(screen_bottom_right) +  '; ' +
                         str(screen_bottom_left) + '; ' +
                         str(M) + "\n"
                     )
@@ -274,8 +274,8 @@ class Main(threading.Thread):
                     log.write(str(self.current_absolute_timestamp) + "; no markers detected; " + str(self.current_timestamp) + '\n')
 
                     #command line feedback for success rate
-                    self.error_frames +=1 
-                
+                    self.error_frames +=1
+
                 out_raw.write(self.raw_frame)
                 logstr = str(self.current_absolute_timestamp) + "; " + str(self.success_frames) + ' / ' + str(self.processed_frames) + '; ' + str(self.error_frames) + ' errors' + '; ' + str((float(self.error_frames) / float(self.processed_frames)) * float(100)) + '%; (' + str(frames.qsize()) + ' buffered'
                 print(logstr)
@@ -284,7 +284,7 @@ class Main(threading.Thread):
                 if self.logcounter > 20:
                     log.write(logstr)
                     self.logcounter = 0
-                                
+
                 self.counter += 1
                 if self.counter > 200:
                     self.counter = 0
@@ -320,7 +320,7 @@ class trackingprocessor(threading.Thread):
             try:
                 line = self.trackingdata.readline()
                 line = json.loads(line, strict=False)
-                
+
                 # skip the first data points which were recorded before the processing started
                 if self.initial_timestamp == 0:
                     line = self.trackingdata.readline()
@@ -342,7 +342,7 @@ class trackingprocessor(threading.Thread):
                         self.initial_timestamp = line['ts']
 
                     #print "syncing"
-            
+
                 else:
                     line['tts'] = line['ts']
                     line['ts'] = line['ts'] - self.initial_timestamp
@@ -350,7 +350,7 @@ class trackingprocessor(threading.Thread):
                     if 'gp' in line:
                         while line['ts'] > self.mtx_timestamp:
                             self.mtx_timestamp, self.mtx_absolute_timestamp, self.gazeShiftMtx = trackingupdate.get()
-                        
+
                         rawX = line['gp'][0]
                         rawY = line['gp'][1]
 
@@ -365,7 +365,7 @@ class trackingprocessor(threading.Thread):
                         processeddata.write(json.dumps(line) + '\n')
             except:
                 pass
-              
+
 try:
     participant = sys.argv[1]
 except:

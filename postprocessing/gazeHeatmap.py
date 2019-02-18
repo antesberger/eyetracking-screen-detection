@@ -13,7 +13,8 @@ start = -1
 end = -1
 
 if len(sys.argv) < 2:
-    print "Please provide arguments in the form: <directory> <start second> <end second>"
+    print "Please provide arguments in the form: <directory> <start time> <end time>"
+    print "The time is to be given in seconds"
     print "If start and end argument are left free, the whole data will be considered"
     sys.exit(0)
 elif len(sys.argv) == 2:
@@ -28,6 +29,7 @@ elif len(sys.argv) == 4:
         sys.exit(0)
 else:
     print "Please provide arguments in the form: <directory> <start second> <end second>"
+    print "The time is to be given in seconds"
     print "If start and end argument are left free, the whole data will be considered"
     sys.exit(0)
 
@@ -79,4 +81,4 @@ else:
 plt.imshow(heatmap.T, extent=extent, origin='lower', interpolation='nearest')
 plt.set_cmap('BuPu')
 plt.colorbar()
-plt.show()
+plt.savefig('./out/' + data + '/gazeHeatmap.pdf')

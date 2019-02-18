@@ -28,7 +28,7 @@ if not os.path.exists('./out/' + data):
 
 with open('./out/' + data + '/eyetracking.csv', mode='w') as eyetracking:
     eyetracking_writer = csv.writer(eyetracking, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-    eyetracking_writer.writerow(['Timestamp', 'x', 'y'])
+    eyetracking_writer.writerow(['Timestamp', 'x (px)', 'y (px)', 'z (mm)'])
 
 #read first frame
 ret, frame = cap.read()
@@ -56,10 +56,18 @@ frameMtx = np.asarray(frameMtx.replace("  ", " ").split(" ")[1:], dtype=np.float
 frameMtx.shape = (3,3)
 
 #loop through all frames
+processcount = 0
+lastprocess = 0
+linesofdata = sum(1 for line in open('./data/eyetracking/' + data + '/eyetracking_data_raw.txt'))
+currentZ = 0
 while cap.isOpened():
+    processcount += 1
 
     dataLine = rawTrackingData.readline()
     dataLine = json.loads(dataLine)
+
+    if 'gp3' in dataLine:
+        currentZ = dataLine['gp3'][2]
 
     #print str(frameTs) + " < " + str(dataTs)
     if 'gp' in dataLine:
@@ -94,22 +102,26 @@ while cap.isOpened():
         rawYpx = rawY * 540
 
         gp = np.array([[[rawXpx, rawYpx]]], dtype = "float32")
+
+        #undistort camera
         #gpDist = cv2.undistortPoints(gp, cameraMatrix, dist) #needed?
         #gp[0][0][0] -=  gpDist[0][0][0]
         #gp[0][0][1] -=  gpDist[0][0][1]
+
         transformedGp = cv2.perspectiveTransform(gp, frameMtx)[0][0]
 
         cv2.circle(frame, (transformedGp[0],transformedGp[1]), 5, (0,0,255), -1)
 
         with open('./out/' + data + '/eyetracking.csv', mode='a') as eyetracking:
             eyetracking_writer = csv.writer(eyetracking, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            eyetracking_writer.writerow([dataTs,transformedGp[0] * 2,transformedGp[1] * 2])
+            eyetracking_writer.writerow([dataTs,transformedGp[0] * 2,transformedGp[1] * 2, currentZ])
 
         # Display the resulting frame
         out.write(frame)
-        #cv2.imshow('frame',frame)
-        #if cv2.waitKey(1) & 0xFF == ord('q'):
-        #    break
+
+    if  processcount - lastprocess >= 1000:
+        lastprocess = processcount
+        print("process: " + str(processcount) + "/" + str(linesofdata))
 
 # When everything done, release the capture
 out.release()

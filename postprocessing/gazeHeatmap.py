@@ -8,6 +8,13 @@ import sys
 from datetime import datetime
 import datetime as dt
 import matplotlib.pyplot as plt
+import configparser
+
+#read config params
+config = configparser.ConfigParser()
+config.read('../config.ini')
+screenHeightPX = int(config['DEFAULT']['screenHeightPX'])
+screenWidthPX = int(config['DEFAULT']['screenWidthPX'])
 
 start = -1
 end = -1
@@ -63,7 +70,7 @@ with open('./out/' + data + '/eyetracking.csv', mode='r') as csvinput:
                 continue
 
         #only consider gaze events which take place on the screen
-        if gazeX >= 0 and gazeX <= 1440 and gazeY >= 0 and gazeY <= 2880:
+        if gazeX >= 0 and gazeX <= screenWidthPX and gazeY >= 0 and gazeY <= screenHeightPX:
             xCoordinates = np.append(xCoordinates, gazeX)
             yCoordinates = np.append(yCoordinates, gazeY)
 

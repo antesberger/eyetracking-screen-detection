@@ -27,6 +27,10 @@ screenWidthMM = int(config['DEFAULT']['screenWidthMM'])
 screenHeightPX = int(config['DEFAULT']['screenHeightPX'])
 screenWidthPX = int(config['DEFAULT']['screenWidthPX'])
 saccadeThreshold = int(config['DEFAULT']['saccadeThreshold'])
+eyetrackerResHeight = int(config['DEFAULT']['eyetrackerResHeight'])
+eyetrackerResWidth = int(config['DEFAULT']['eyetrackerResWidth'])
+eyetrackerVideoQuality = int(config['DEFAULT']['eyetrackerVideoQuality'])
+outVideoQuality = int(config['DEFAULT']['outVideoQuality'])
 
 #initialize files for readining
 cap = cv2.VideoCapture('./data/eyetracking/' + data + '/gaze_video_processed.mov')
@@ -111,8 +115,8 @@ while cap.isOpened():
         rawX = dataLine['gp'][0]
         rawY = dataLine['gp'][1]
 
-        rawXpx = rawX * 960
-        rawYpx = rawY * 540
+        rawXpx = rawX * (eyetrackerVideoQuality * eyetrackerResWidth)
+        rawYpx = rawY * (eyetrackerVideoQuality * eyetrackerResHeight)
 
         gp = np.array([[[rawXpx, rawYpx]]], dtype = "float32")
 

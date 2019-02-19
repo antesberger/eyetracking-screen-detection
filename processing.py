@@ -7,6 +7,13 @@ from numpy import array
 import sys
 import datetime
 import json
+import matplotlib.pyplot as plt
+
+#read config params
+config = configparser.ConfigParser()
+config.read('../config.ini')
+quality = int(config['DEFAULT']['eyetrackerVideoQuality']) # size of the input video. 1 == 1920*1080
+outputQuality = int(config['DEFAULT']['outVideoQuality']) # size of the cropped output avi file. 1 == nexus5 screen size (1080*1920), 2 == 1/2 ...
 
 dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
 frames = Queue.Queue()
@@ -15,8 +22,6 @@ trackingupdate = Queue.Queue()
 frame_width = 0
 frame_height = 0
 recording_flag = True
-quality = 2 # size of the input video. 1 == 1920*1080
-outputQuality = 2 # size of the cropped output avi file. 1 == nexus5 screen size (1080*1920), 2 == 1/2 ...
 
 class ImageGrabber(threading.Thread):
     def __init__(self):
@@ -101,10 +106,10 @@ class Main(threading.Thread):
         # phone and screen constants
         self.marker_size = 66 #rectangular (mm)
         self.secondary_marker_size = 20
-        self.screen_height = 130 #mm
-        self.screen_width = 66 #mm
-        self.screen_pixel_height = 2880
-        self.screen_pixel_width = 1440
+        self.screen_height = int(config['DEFAULT']['screenHeightMM']) #mm
+        self.screen_width = int(config['DEFAULT']['screenHeightMM']) #mm
+        self.screen_pixel_height = int(config['DEFAULT']['screenHeightPX'])
+        self.screen_pixel_width = int(config['DEFAULT']['screenHeightPX'])
 
         # precomputed calibration constants for the eyetracker
         self.dist = numpy.array([[0.05357947, -0.22872005, -0.00118557, -0.00126952, 0.2067489 ]])
@@ -354,8 +359,8 @@ class trackingprocessor(threading.Thread):
                         rawX = line['gp'][0]
                         rawY = line['gp'][1]
 
-                        rawXpx = rawX * 960
-                        rawYpx = rawY * 540
+                        rawXpx = rawX * (int(config['DEFAULT']['eyetrackerResWidth']) / quality)
+                        rawYpx = rawY * (int(config['DEFAULT']['screenHeightPX']) / quality)
 
                         gp = numpy.array([[[rawXpx, rawYpx]]], dtype = "float32")
                         new_gp = cv2.perspectiveTransform(gp, self.gazeShiftMtx)

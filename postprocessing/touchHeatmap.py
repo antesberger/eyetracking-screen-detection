@@ -8,6 +8,13 @@ import sys
 from datetime import datetime
 import datetime as dt
 import matplotlib.pyplot as plt
+import configparser
+
+#read config params
+config = configparser.ConfigParser()
+config.read('../config.ini')
+screenHeightPX = int(config['DEFAULT']['screenHeightPX'])
+screenWidthPX = int(config['DEFAULT']['screenWidthPX'])
 
 start = -1
 end = -1
@@ -73,7 +80,7 @@ with open('./out/' + data + '/gesture.csv', mode='r') as csvinput:
             if currentTimePosition < dt.timedelta(0,int(start)) or currentTimePosition > dt.timedelta(0,int(end)):
                 continue
 
-        if touchX >= 0 and touchX <= 1440 and touchY >= 0 and touchY <= 2880:
+        if touchX >= 0 and touchX <= screenWidthPX and touchY >= 0 and touchY <= screenHeightPX:
             xCoordinates = np.append(xCoordinates, touchX)
             yCoordinates = np.append(yCoordinates, touchY)
 

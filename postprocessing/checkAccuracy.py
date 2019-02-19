@@ -74,7 +74,7 @@ with open('./out/' + data + '/accuracy.csv', mode='a') as csvoutput:
                 #deviation in mm
                 deviationXmm = float(screenWidthMM) * (float(deviationXpx)/float(screenWidthPX))
                 deviationYmm = float(screenHeightMM) * (float(deviationYpx)/float(screenHeightPX))
-                totalDeviationMM = int(math.sqrt((deviationXmm ** 2) + (deviationYmm ** 2)))
+                totalDeviationMM = math.sqrt((deviationXmm ** 2) + (deviationYmm ** 2))
 
                 #deviation angle: tan(a) = gegenkathete/ankathete
                 if gazeZ != 0:

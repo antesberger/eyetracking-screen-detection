@@ -8,6 +8,7 @@ import sys
 import math
 from datetime import datetime
 import configparser
+import matplotlib.pyplot as plt
 
 dist = np.array([[0.05357947, -0.22872005, -0.00118557, -0.00126952, 0.2067489 ]])
 cameraMatrix = np.array([[1.12585498e+03, 0.00000000e+00, 9.34478069e+02], [0.00000000e+00, 1.10135217e+03, 5.84380561e+02], [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
@@ -25,6 +26,7 @@ screenHeightMM = int(config['DEFAULT']['screenHeightMM'])
 screenWidthMM = int(config['DEFAULT']['screenWidthMM'])
 screenHeightPX = int(config['DEFAULT']['screenHeightPX'])
 screenWidthPX = int(config['DEFAULT']['screenWidthPX'])
+saccadeThreshold = int(config['DEFAULT']['saccadeThreshold'])
 
 #initialize files for readining
 cap = cv2.VideoCapture('./data/eyetracking/' + data + '/gaze_video_processed.mov')
@@ -70,6 +72,7 @@ processcount = 0
 lastprocess = 0
 linesofdata = sum(1 for line in open('./data/eyetracking/' + data + '/eyetracking_data_raw.txt'))
 currentZ = 0
+gazeChangeVelocities = np.array([])
 while cap.isOpened():
     processcount += 1
 
@@ -152,9 +155,10 @@ while cap.isOpened():
             normalizationFactor = 1
 
         degPerSec = gazeChangeDeg * normalizationFactor
+        gazeChangeVelocities = np.append(gazeChangeVelocities, int(round(degPerSec)))
 
         classification = ''
-        if degPerSec < 20:
+        if degPerSec < saccadeThreshold:
             classification = 'fixation'
         else:
             classification = 'saccade'
@@ -181,3 +185,26 @@ print("skipped the rest as no marker was detected for these frames")
 out.release()
 cap.release()
 cv2.destroyAllWindows()
+
+#prepare and save gazeChange plot
+gazeChangeVelocities = gazeChangeVelocities.astype(int)
+gazeChangesValueCount = np.bincount(gazeChangeVelocities)
+gazeChangeVelocityDistribution = np.nonzero(gazeChangesValueCount)[0]
+zipped = zip(gazeChangeVelocityDistribution,gazeChangesValueCount[gazeChangeVelocityDistribution])
+
+values = np.array([])
+counts = np.array([])
+rest = np.array([])
+for item in zipped:
+    if item[0] < 100: #filter outliers
+        values = np.append(values, item[0])
+        counts = np.append(counts, item[1])
+
+x_pos = np.arange(len(values))[0::10]
+
+plt.bar(values, counts, align='center')
+plt.xticks(x_pos, rotation=90)
+plt.title('Velocity distribution < 100 deg/s ')
+plt.ylabel('count')
+plt.ylabel('deg/s')
+plt.savefig('./out/' + data + '/gazeChangeVelocity.pdf')

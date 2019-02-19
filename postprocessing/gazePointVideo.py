@@ -5,7 +5,9 @@ import time
 import csv
 import os
 import sys
+import math
 from datetime import datetime
+import configparser
 
 dist = np.array([[0.05357947, -0.22872005, -0.00118557, -0.00126952, 0.2067489 ]])
 cameraMatrix = np.array([[1.12585498e+03, 0.00000000e+00, 9.34478069e+02], [0.00000000e+00, 1.10135217e+03, 5.84380561e+02], [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
@@ -15,6 +17,14 @@ if len(sys.argv) != 2:
     print "Please provide the directory name as an argument"
 else:
     data = sys.argv[1]
+
+#read config params
+config = configparser.ConfigParser()
+config.read('../config.ini')
+screenHeightMM = int(config['DEFAULT']['screenHeightMM'])
+screenWidthMM = int(config['DEFAULT']['screenWidthMM'])
+screenHeightPX = int(config['DEFAULT']['screenHeightPX'])
+screenWidthPX = int(config['DEFAULT']['screenWidthPX'])
 
 #initialize files for readining
 cap = cv2.VideoCapture('./data/eyetracking/' + data + '/gaze_video_processed.mov')
@@ -28,7 +38,7 @@ if not os.path.exists('./out/' + data):
 
 with open('./out/' + data + '/eyetracking.csv', mode='w') as eyetracking:
     eyetracking_writer = csv.writer(eyetracking, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-    eyetracking_writer.writerow(['Timestamp', 'x (px)', 'y (px)', 'z (mm)'])
+    eyetracking_writer.writerow(['Timestamp', 'x (px)', 'y (px)', 'z (mm)', 'change (px)', 'change (mm)', 'change (deg)', 'velocity (deg/s)', 'saccade/fixation'])
 
 #read first frame
 ret, frame = cap.read()
@@ -103,18 +113,61 @@ while cap.isOpened():
 
         gp = np.array([[[rawXpx, rawYpx]]], dtype = "float32")
 
-        #undistort camera
-        #gpDist = cv2.undistortPoints(gp, cameraMatrix, dist) #needed?
-        #gp[0][0][0] -=  gpDist[0][0][0]
-        #gp[0][0][1] -=  gpDist[0][0][1]
+        newtransformedGp = cv2.perspectiveTransform(gp, frameMtx)[0][0]
 
-        transformedGp = cv2.perspectiveTransform(gp, frameMtx)[0][0]
+        #set change to 0 in first iteration
+        try:
+            transformedGp
+        except:
+            transformedGp = [0,0]
+
+        #get gaze change compared to last frame
+        gazeChangeXpx = math.sqrt((transformedGp[0] - newtransformedGp[0]) ** 2)
+        gazeChangeYpx = math.sqrt((transformedGp[1] - newtransformedGp[1]) ** 2)
+        gazeChangePx = math.sqrt((gazeChangeXpx ** 2) + (gazeChangeYpx ** 2))
+
+        gazeChangeXmm = float(screenWidthMM) * (float(gazeChangeXpx)/float(screenWidthPX))
+        gazeChangeYmm = float(screenHeightMM) * (float(gazeChangeYpx)/float(screenHeightPX))
+        gazeChangeMM = math.sqrt((gazeChangeXmm ** 2) + (gazeChangeYmm ** 2))
+
+        #deviation angle: tan(a) = gegenkathete/ankathete
+        if currentZ != 0:
+            tanA = gazeChangeMM/currentZ
+            gazeChangeDeg =  math.degrees(math.atan(tanA))
+        else:
+            gazeChangeDeg = 0
+
+        #classify saccade (>300 deg/sec) and fixations (<100 deg/sec)
+        try:
+            lastDataTs
+        except:
+            lastDataTs = dataTs
+
+        timeDifference = dataTs - lastDataTs
+        timeDifferenceMs = float(timeDifference.microseconds) / 10000000.0
+
+        try:
+            normalizationFactor = 1 / timeDifferenceMs
+        except:
+            normalizationFactor = 1
+
+        degPerSec = gazeChangeDeg * normalizationFactor
+
+        classification = ''
+        if degPerSec < 20:
+            classification = 'fixation'
+        else:
+            classification = 'saccade'
+
+        #update last recorded coordinates for next iteration
+        transformedGp = newtransformedGp
+        lastDataTs = dataTs
 
         cv2.circle(frame, (transformedGp[0],transformedGp[1]), 5, (0,0,255), -1)
 
         with open('./out/' + data + '/eyetracking.csv', mode='a') as eyetracking:
             eyetracking_writer = csv.writer(eyetracking, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            eyetracking_writer.writerow([dataTs,transformedGp[0] * 2,transformedGp[1] * 2, currentZ])
+            eyetracking_writer.writerow([dataTs,transformedGp[0] * 2,transformedGp[1] * 2, currentZ, gazeChangePx, gazeChangeMM, gazeChangeDeg, degPerSec, classification])
 
         # Display the resulting frame
         out.write(frame)

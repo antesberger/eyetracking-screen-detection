@@ -121,9 +121,10 @@ while cap.isOpened():
 
     if  processcount - lastprocess >= 1000:
         lastprocess = processcount
-        print("process: " + str(processcount) + "/" + str(linesofdata))
+        print('process: ' + str(int((float(processcount)/float(linesofdata)) * 100)) + '%')
 
 # When everything done, release the capture
+print("skipped the rest as no marker was detected for these frames")
 out.release()
 cap.release()
 cv2.destroyAllWindows()

@@ -33,8 +33,8 @@ elif len(sys.argv) == 5:
     eventType = sys.argv[4]
 
 if int(start) > int(end):
-        print ("The start argument should be bigger than the end.")
-        sys.exit(0)
+    print ("The start argument should be bigger than the end.")
+    sys.exit(0)
 
 #safe gesture data to array
 #csv needs to be created beforehand

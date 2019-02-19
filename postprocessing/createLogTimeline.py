@@ -97,7 +97,7 @@ if task != '':
     phoneLogTs = datetime.strptime(phoneLogLine.split(": ")[0], "%Y-%m-%d %H:%M:%S,%f")
 
     while phoneLogLine != '':
-        print phoneLogLine
+        print(phoneLogLine)
         phoneLogLine = phoneLog.readline()[:-1]
         if phoneLogLine != '':
             phoneLogTs = datetime.strptime(phoneLogLine.split("; ")[0], "%Y-%m-%d %H:%M:%S.%f")

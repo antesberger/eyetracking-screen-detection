@@ -14,6 +14,7 @@ config = configparser.ConfigParser()
 config.read('../config.ini')
 quality = int(config['DEFAULT']['eyetrackerVideoQuality']) # size of the input video. 1 == 1920*1080
 outputQuality = int(config['DEFAULT']['outVideoQuality']) # size of the cropped output avi file. 1 == nexus5 screen size (1080*1920), 2 == 1/2 ...
+liveProcessing = bool(config['DEFAULT']['liveProcessing']) # size of the cropped output avi file. 1 == nexus5 screen size (1080*1920), 2 == 1/2 ...
 
 dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
 frames = Queue.Queue()
@@ -23,7 +24,7 @@ frame_width = 0
 frame_height = 0
 recording_flag = True
 
-class ImageGrabber(threading.Thread):
+class ImageCapturing(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
         self.stream = cv2.VideoCapture("config.sdp")
@@ -52,7 +53,7 @@ class ImageGrabber(threading.Thread):
                 print('Stream ended')
                 break
 
-class Main(threading.Thread):
+class Tracking(threading.Thread):
     def __init__(self, participant):
         threading.Thread.__init__(self)
         self.participant = participant
@@ -304,7 +305,7 @@ class Main(threading.Thread):
         cv2.destroyAllWindows()
         sys.exit(0)
 
-class trackingprocessor(threading.Thread):
+class GazePointProcessing(threading.Thread):
     def __init__(self, participant):
         threading.Thread.__init__(self)
         self.participant = participant
@@ -321,7 +322,7 @@ class trackingprocessor(threading.Thread):
 
         processeddata = open(directory + "/eyetracking_data_processed.txt", "a+")
 
-        while True:
+        while liveProcessing = True:
             try:
                 line = self.trackingdata.readline()
                 line = json.loads(line, strict=False)
@@ -377,14 +378,14 @@ except:
     print 'please provide the participants identification as an argument.'
     sys.exit(0)
 
-grabber = ImageGrabber()
-main = Main(participant)
-# trackingprocessor = trackingprocessor(participant)
+grabber = ImageCapturing()
+tracking = Tracking(participant)
+gazepointprocessing = GazePointProcessing(participant)
 
 grabber.start()
-main.start()
-# trackingprocessor.start()
+tracking.start()
+gazepointprocessing.start()
 
 grabber.join()
-main.join()
-# trackingprocessor.join()
+tracking.join()
+gazepointprocessing.join()

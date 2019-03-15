@@ -16,8 +16,8 @@ images = ['activity_1','activity_2','activity_3','activity_4','activity_5','acti
 imagesHeight = [480, 480, 480, 405, 500, 405, 480, 925, 480, 450, 540, 510, 480, 530, 480, 480, 480, 480, 510, 480, 480, 480, 480, 480, 468, 960, 480, 480, 1080, 960, 560, 480, 480, 480, 540, 405, 540, 480, 940, 480, 480, 480, 450, 480, 510, 480, 480, 480, 405, 480, 480, 480, 1083, 406, 540, 480, 480, 540, 1080, 480, 480, 480, 480, 480, 430, 440, 480, 390, 480, 480, 480, 480, 480, 840, 480, 480, 405, 420, 430]
 imagesHeight = [(i * 2) + 55 for i in imagesHeight]
 
-imageData = open('./data/phone/gallery/' + data + '/scrollInfo.txt', 'r')
-randomOrder = open('./data/phone/gallery/' + data + '/imageorder.txt', 'r')
+imageData = open(data + '/scrollInfo.txt', 'r')
+randomOrder = open(data + '/imageorder.txt', 'r')
 scrollLine = imageData.readline()
 nextScrollLine = imageData.readline()
 
@@ -37,11 +37,11 @@ for index in randomOrderIndices:
     imagesHeight[i] = tmp
 
     i = i - 1
-with open('./out/' + data + '/imageMapping.csv', mode='a') as csvoutput:
+with open(data + '/out/imageMapping.csv', mode='a') as csvoutput:
     csv_writer = csv.writer(csvoutput, lineterminator='\n')
     csv_writer.writerow(['Timestamp', 'x', 'y', 'image', 'first image end', 'second image end', 'third image end'])
 
-with open('./out/' + data + '/eyetracking.csv', mode='r') as csvinput:
+with open(data + '/out/eyetracking.csv', mode='r') as csvinput:
     csv_reader = csv.reader(csvinput, delimiter=',')
 
     all = []
@@ -89,7 +89,7 @@ with open('./out/' + data + '/eyetracking.csv', mode='r') as csvinput:
             i = 0
 
             while i < lastVisibleImage:
-                offset += int(x[i])
+                offset += int(imagesHeight[i])
                 i += 1
 
             try:
@@ -118,7 +118,7 @@ with open('./out/' + data + '/eyetracking.csv', mode='r') as csvinput:
                 image = 'none'
                 print(str(gazeTs) + ": " + 'none')
 
-            with open('./out/' + data + '/imageMapping.csv', mode='a') as csvoutput:
+            with open(data + '/out/imageMapping.csv', mode='a') as csvoutput:
                 csv_writer = csv.writer(csvoutput, lineterminator='\n')
                 csv_writer.writerow([gazeTs, gazeX, gazeY, image, str(firstImage), str(secondImage), str(thirdImage)])
 

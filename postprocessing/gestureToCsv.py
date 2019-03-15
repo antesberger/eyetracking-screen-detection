@@ -10,24 +10,14 @@ from datetime import datetime
 if len(sys.argv) != 2:
     print "Please provide the folder name as an argument"
 else:
-    data = sys.argv[1]
+    path = sys.argv[1]
 
-task = ''
-if data[:3].lower() == 'acc':
-    task = 'accuracy'
-elif data[:3].lower() == 'cha':
-    task = 'chat'
-elif data[:3].lower() == 'gal':
-    task = 'gallery'
-elif data[:3].lower() == 'map':
-    task = 'map'
-
-gesture = open('./data/phone/' + task + '/' + data + '/gesture.txt', 'r')
+gesture = open(path + '/gesture.txt', 'r')
 gestureLine = gesture.readline()
 
-with open('./out/' + data + '/gesture.csv', mode='a') as csvoutput:
+with open(path + '/out/gesture.csv', mode='a') as csvoutput:
     csv_writer = csv.writer(csvoutput, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-    csv_writer.writerow(['timestamp', 'type', 'action', 'actionButton', 'id[0]', 'x[0]', 'y[0]', 'toolType[0]', 'buttonState', 'metaState', 'flags', 'edgeFlags', 'point^C0]', 'toolType[0]', 'buttonState', 'metaState', 'flags', 'edgeFlags', 'pointerCount', 'historySize', 'eventTime', 'downTime', 'deviceId', 'source'])
+    csv_writer.writerow(['timestamp', 'type', 'action', 'actionButton', 'id[0]', 'x[0]', 'y[0]', 'toolType[0]', 'buttonState', 'metaState', 'flags', 'edgeFlags', 'point^C0]', 'toolType[0]', 'buttonState', 'metaState', 'flags', 'edgeFlags'])
 
     while gestureLine != '':
         ts = datetime.strptime(gestureLine.split("; ")[0], "%Y-%m-%d %H:%M:%S.%f")
@@ -39,6 +29,6 @@ with open('./out/' + data + '/gesture.csv', mode='a') as csvoutput:
         content.insert(0,gestureType)
         content.insert(0,str(ts))
 
-        print content
+        # print content
         csv_writer.writerow(content)
         gestureLine = gesture.readline()

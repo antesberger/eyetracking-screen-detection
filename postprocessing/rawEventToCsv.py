@@ -12,23 +12,13 @@ if len(sys.argv) != 2:
 else:
     data = sys.argv[1]
 
-task = ''
-if data[:3].lower() == 'acc':
-    task = 'accuracy'
-elif data[:3].lower() == 'cha':
-    task = 'chat'
-elif data[:3].lower() == 'gal':
-    task = 'gallery'
-elif data[:3].lower() == 'map':
-    task = 'map'
-
-rawEvents = open('./data/phone/' + task + "/" + data + '/rawEvent.txt', 'r')
-rawHistoricalEvents = open('./data/phone/' + task + "/" + data + '/rawHistoricalEvent.txt', 'r')
+rawEvents = open(data + '/rawEvent.txt', 'r')
+rawHistoricalEvents = open(data + '/rawHistoricalEvent.txt', 'r')
 
 rawEventLine = rawEvents.readline()
 rawHistEventLine = rawHistoricalEvents.readline()
 
-with open('./out/' + data + '/motionEvents.csv', mode='a') as csvoutput:
+with open(data + '/out/motionEvents.csv', mode='a') as csvoutput:
     csv_writer = csv.writer(csvoutput, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
     csv_writer.writerow(['timestamp', 'action', 'actionButton', 'id[0]', 'x[0]', 'y[0]', 'toolType[0]', 'buttonState', 'metaState', 'flags', 'edgeFlags', 'pointerCount', 'historySize', 'eventTime', 'downTime', 'deviceId', 'source'])
 

@@ -28,7 +28,7 @@ screenWidthPX = int(config['DEFAULT']['screenWidthPX'])
 # pixel postions on 1440x2880 pixel screen
 marker = [(329,843), (720, 843), (1112, 843), (343, 1505), (720, 1505), (1112, 1505), (329, 2170), (720, 2155), (1112, 2170)]
 
-log = open('./data/phone/accuracy/' + data + '/log.txt', 'r')
+log = open(data + '/log.txt', 'r')
 logLine = log.readline()
 logLine = log.readline()
 logLine = log.readline()
@@ -41,11 +41,11 @@ totalDeviationsPx = []
 totalDeviationsMm = []
 deviationsDeg = []
 
-with open('./out/' + data + '/accuracy.csv', mode='a') as csvoutput:
+with open(data + '/out/accuracy.csv', mode='a') as csvoutput:
     csv_writer = csv.writer(csvoutput, lineterminator='\n')
     csv_writer.writerow(['Eyetracking ts', 'Target appeared ts', 'deviation x in px', 'deviation y in px', 'deviation in px', 'deviation mm', 'deviation degree', 'mean deviation px', 'mean deviation mm', 'mean deviation degree'])
 
-    with open('./out/' + data + '/eyetracking.csv', mode='r') as csvinput:
+    with open(data + '/out/eyetracking.csv', mode='r') as csvinput:
         csv_reader = csv.reader(csvinput, delimiter=',')
 
         header = True

@@ -33,16 +33,16 @@ eyetrackerVideoQuality = int(config['DEFAULT']['eyetrackerVideoQuality'])
 outVideoQuality = int(config['DEFAULT']['outVideoQuality'])
 
 #initialize files for readining
-cap = cv2.VideoCapture('./data/eyetracking/' + data + '/gaze_video_processed.mov')
-rawTrackingData = open('./data/eyetracking/' + data + '/eyetracking_data_raw.txt', 'r')
-computedFrames = open('./data/eyetracking/' + data + '/computed_frames.txt', 'r')
+cap = cv2.VideoCapture(data + '/gaze_video_processed.mov')
+rawTrackingData = open(data + '/eyetracking_data_raw.txt', 'r')
+computedFrames = open(data + '/computed_frames.txt', 'r')
 dataLine = json.loads(rawTrackingData.readline())
 frameLine = (computedFrames.readline() + computedFrames.readline() + computedFrames.readline()).split(';')
 
-if not os.path.exists('./out/' + data):
-    os.makedirs('./out/' + data)
+if not os.path.exists(data + '/out/'):
+    os.makedirs(data + '/out/')
 
-with open('./out/' + data + '/eyetracking.csv', mode='w') as eyetracking:
+with open(data + '/out/eyetracking.csv', mode='w') as eyetracking:
     eyetracking_writer = csv.writer(eyetracking, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
     eyetracking_writer.writerow(['Timestamp', 'x (px)', 'y (px)', 'z (mm)', 'change (px)', 'change (mm)', 'change (deg)', 'velocity (deg/s)', 'saccade/fixation'])
 
@@ -53,7 +53,7 @@ cv2.imshow('frame',frame)
 #initialize video output
 fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
 inputWidth, inputHeight, c = frame.shape
-out = cv2.VideoWriter('./out/' + data + '/gazeVideo.avi',fourcc, 25, (inputHeight,inputWidth))
+out = cv2.VideoWriter(data + '/out/gazeVideo.avi',fourcc, 25, (inputHeight,inputWidth))
 
 #syncing: Skip first data frames that were recorded before the frist frame was processed
 dataTs = datetime.strptime(dataLine['ats'], "%Y-%m-%d-%H-%M-%S-%f")
@@ -74,7 +74,7 @@ frameMtx.shape = (3,3)
 #loop through all frames
 processcount = 0
 lastprocess = 0
-linesofdata = sum(1 for line in open('./data/eyetracking/' + data + '/eyetracking_data_raw.txt'))
+linesofdata = sum(1 for line in open(data + '/eyetracking_data_raw.txt'))
 currentZ = 0
 gazeChangeVelocities = np.array([])
 while cap.isOpened():
@@ -115,8 +115,8 @@ while cap.isOpened():
         rawX = dataLine['gp'][0]
         rawY = dataLine['gp'][1]
 
-        rawXpx = rawX * (eyetrackerVideoQuality * eyetrackerResWidth)
-        rawYpx = rawY * (eyetrackerVideoQuality * eyetrackerResHeight)
+        rawXpx = rawX * (eyetrackerResWidth/eyetrackerVideoQuality)
+        rawYpx = rawY * (eyetrackerResHeight/eyetrackerVideoQuality)
 
         gp = np.array([[[rawXpx, rawYpx]]], dtype = "float32")
 
@@ -173,7 +173,7 @@ while cap.isOpened():
 
         cv2.circle(frame, (transformedGp[0],transformedGp[1]), 5, (0,0,255), -1)
 
-        with open('./out/' + data + '/eyetracking.csv', mode='a') as eyetracking:
+        with open(data + '/out/eyetracking.csv', mode='a') as eyetracking:
             eyetracking_writer = csv.writer(eyetracking, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             eyetracking_writer.writerow([dataTs,transformedGp[0] * 2,transformedGp[1] * 2, currentZ, gazeChangePx, gazeChangeMM, gazeChangeDeg, degPerSec, classification])
 
@@ -211,4 +211,4 @@ plt.xticks(x_pos, rotation=90)
 plt.title('Velocity distribution < 100 deg/s ')
 plt.ylabel('count')
 plt.ylabel('deg/s')
-plt.savefig('./out/' + data + '/gazeChangeVelocity.pdf')
+plt.savefig(data + '/out/gazeChangeVelocity.pdf')

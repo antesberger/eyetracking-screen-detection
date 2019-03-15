@@ -40,7 +40,7 @@ yCoordinates = np.array([])
 startTs = 0
 
 #loop through gaze coordinates
-with open('./out/' + data + '/eyetracking.csv', mode='r') as csvinput:
+with open(data + '/out/eyetracking.csv', mode='r') as csvinput:
     csv_reader = csv.reader(csvinput, delimiter=',')
 
     #ignore first row only containing header info
@@ -88,4 +88,4 @@ else:
 plt.imshow(heatmap.T, extent=extent, origin='lower', interpolation='nearest')
 plt.set_cmap('BuPu')
 plt.colorbar()
-plt.savefig('./out/' + data + '/gazeHeatmap.pdf')
+plt.savefig(data + '/out/gazeHeatmap.pdf')

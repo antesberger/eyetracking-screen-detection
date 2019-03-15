@@ -13,10 +13,13 @@ if len(sys.argv) != 2:
 else:
     data = sys.argv[1]
 
-log = open('./data/eyetracking/' + data + '/log.txt', 'r')
+if not os.path.exists(data + '/out/'):
+    os.makedirs(data + '/out/')
+
+log = open(data + '/log.txt', 'r')
 logLine = log.readline()
 
-computedFrames = open('./data/eyetracking/' + data + '/computed_frames.txt', 'r')
+computedFrames = open(data + '/computed_frames.txt', 'r')
 computedFramesLine = computedFrames.readline()
 
 errorcount = 0
@@ -27,15 +30,27 @@ totalframes = 0
 
 errorcountList = []
 tsList = []
-with open('./out/' + data + '/log.csv', mode='w') as timeline:
+progessProblemCount = 0
+with open(data + '/out/log.csv', mode='w') as timeline:
     timeline_writer = csv.writer(timeline, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
     timeline_writer.writerow(['Timestamp', 'totalFrames', 'successFrames', 'errorFrames', 'errorRate', 'marker 1 errors', 'marker 2 errors', 'problemRate', 'errormessage'])
 
     while logLine != '' or computedFramesLine != '':
 
         try:
-            errorTs = datetime.strptime(logLine.split("; ")[0], "%Y-%m-%d-%H-%M-%S-%f")
+            tmpErrorTs = datetime.strptime(logLine.split("; ")[0], "%Y-%m-%d-%H-%M-%S-%f")
+            errorTs = tmpErrorTs
         except:
+            tmpArray = logLine.split("(")
+            tmpLine = tmpArray[len(tmpArray)-1][:-3]
+
+            try:
+                tmpErrorTs = datetime.strptime(tmpLine, "%Y-%m-%d-%H-%M-%S-%f")
+                errorTs = tmpErrorTs
+            except:
+                progessProblemCount += 1
+                pass
+
             pass
 
         try:
@@ -75,6 +90,9 @@ with open('./out/' + data + '/log.csv', mode='w') as timeline:
 
         errorcountList.append(errorcount)
 
+
+print(data + ": " + str(progessProblemCount))
+
 #begin drawing plot
 plt.plot(tsList,errorcountList)
 plt.gcf().autofmt_xdate()
@@ -92,7 +110,7 @@ elif data[:3].lower() == 'map':
     task = 'map'
 
 if task != '':
-    phoneLog = open('./data/phone/' + task + '/' + data + '/log.txt', 'r')
+    phoneLog = open(data + '/phoneData/' + task + '/' + data + '/log.txt', 'r')
     phoneLogLine = phoneLog.readline()[:-1]
     phoneLogTs = datetime.strptime(phoneLogLine.split(": ")[0], "%Y-%m-%d %H:%M:%S,%f")
 
@@ -104,5 +122,5 @@ if task != '':
             plt.axvline(x=phoneLogTs, color='black', linestyle='--')
             plt.text(phoneLogTs, errorcount, phoneLogLine.split("; ")[1], rotation=90)
 
-plt.savefig('./out/' + data + '/logTimeline.pdf')
+plt.savefig(data + '/out/logTimeline.pdf')
 #plt.show()

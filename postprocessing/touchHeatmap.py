@@ -47,7 +47,7 @@ yCoordinates = np.array([])
 startTs = 0
 
 #loop through touch events
-with open('./out/' + data + '/gesture.csv', mode='r') as csvinput:
+with open(data + '/out/gesture.csv', mode='r') as csvinput:
     csv_reader = csv.reader(csvinput, delimiter=',')
 
     #first row is only header info
@@ -98,4 +98,4 @@ else:
 plt.imshow(heatmap.T, extent=extent, origin='lower', interpolation='nearest')
 plt.set_cmap('BuPu')
 plt.colorbar()
-plt.savefig('./out/' + data + '/touchHeatmap.pdf')
+plt.savefig(data + '/out/touchHeatmap.pdf')

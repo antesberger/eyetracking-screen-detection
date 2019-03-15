@@ -46,7 +46,7 @@ if int(start) > int(end):
 #safe gesture data to array
 #csv needs to be created beforehand
 touchData = []
-with open('./out/' + data + '/gesture.csv', mode='r') as csvinputtouch:
+with open(data + '/out/gesture.csv', mode='r') as csvinputtouch:
     touch_reader = csv.reader(csvinputtouch, delimiter=',')
 
     header = True
@@ -71,7 +71,7 @@ i = 0
 #iterate through every line in eyetracking.csv
 #in each iteration: check each touch event which took place in between last and current eyetracking timestamp
 #append difffernce of touch and gaze coordinates to array
-with open('./out/' + data + '/eyetracking.csv', mode='r') as csvinputgaze:
+with open(data + '/out/eyetracking.csv', mode='r') as csvinputgaze:
     gaze_reader = csv.reader(csvinputgaze, delimiter=',')
 
     header = True
@@ -138,4 +138,4 @@ else:
 plt.imshow(heatmap.T, extent=extent, origin='lower', interpolation='nearest')
 plt.set_cmap('BuPu')
 plt.colorbar()
-plt.savefig('./out/' + data + '/relativeTouchHeatmap.pdf')
+plt.savefig(data + '/out/relativeTouchHeatmap.pdf')

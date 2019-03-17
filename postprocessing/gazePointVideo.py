@@ -77,6 +77,7 @@ lastprocess = 0
 linesofdata = sum(1 for line in open(data + '/eyetracking_data_raw.txt'))
 currentZ = 0
 gazeChangeVelocities = np.array([])
+lastFrameMtx = np.array([])
 while cap.isOpened():
     processcount += 1
 
@@ -99,8 +100,12 @@ while cap.isOpened():
             for char in ["[","]","\n","\r"]:
                 frameMtx = frameMtx.replace(char,"")
 
-            frameMtx = np.asarray(frameMtx.replace("  ", " ").split(" ")[1:], dtype=np.float32)
-            frameMtx.shape = (3,3)
+            try:
+                frameMtx = np.asarray(frameMtx.replace("  ", " ").split(" ")[1:], dtype=np.float32)
+                frameMtx.shape = (3,3)
+            except:
+                frameMtx = lastFrameMtx
+                pass
 
             ret, frame = cap.read()
 
@@ -110,6 +115,7 @@ while cap.isOpened():
 
             frameLine = (computedFrames.readline() + computedFrames.readline() + computedFrames.readline()).split(';')
             frameTs = datetime.strptime(frameLine[1], " %Y-%m-%d-%H-%M-%S-%f")
+            lastFrameMtx = frameMtx
 
         #transforming gazepoint
         rawX = dataLine['gp'][0]
@@ -159,7 +165,8 @@ while cap.isOpened():
             normalizationFactor = 1
 
         degPerSec = gazeChangeDeg * normalizationFactor
-        gazeChangeVelocities = np.append(gazeChangeVelocities, int(round(degPerSec)))
+        if(int(round(degPerSec)) < 200):
+            gazeChangeVelocities = np.append(gazeChangeVelocities, int(round(degPerSec)))
 
         classification = ''
         if degPerSec < saccadeThreshold:
@@ -199,16 +206,20 @@ zipped = zip(gazeChangeVelocityDistribution,gazeChangesValueCount[gazeChangeVelo
 values = np.array([])
 counts = np.array([])
 rest = np.array([])
+
+first = True
 for item in zipped:
-    if item[0] < 100: #filter outliers
+    if item[0] < 200 and not first: #filter outliers
         values = np.append(values, item[0])
         counts = np.append(counts, item[1])
+
+    first = False
 
 x_pos = np.arange(len(values))[0::10]
 
 plt.bar(values, counts, align='center')
 plt.xticks(x_pos, rotation=90)
-plt.title('Velocity distribution < 100 deg/s ')
-plt.ylabel('count')
+plt.title('Velocity distribution < 200 deg/s ')
+plt.xlabel('count')
 plt.ylabel('deg/s')
 plt.savefig(data + '/out/gazeChangeVelocity.pdf')
